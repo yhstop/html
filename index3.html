@@ -8,108 +8,205 @@
     /* 지도가 표시될 영역의 크기가 반드시 필요합니다 */
     #map { width: 100%; height: 420px; }
     body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
     input { padding: 10px 12px; min-width: 260px; }
     button { padding: 10px 12px; cursor: pointer; }
-    .hint { color: #555; font-size: 14px; }
+    .hint { color: #555; font-size: 14px; margin: 0 0 12px; }
+    .status { font-size: 13px; color: #333; margin: 8px 0 0; }
+    code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
   </style>
 </head>
 <body>
   <h1 style="margin:0 0 8px; font-size:20px;">카카오맵 API 지도 표시</h1>
-  <p class="hint" style="margin:0 0 12px;">
-    1) 아래 스크립트의 <code>YOUR_APP_KEY</code>를 카카오 개발자 콘솔에서 발급받은 JavaScript 키로 바꾸세요.
-    2) (권장) 개발자 콘솔에서 도메인 등록을 해두세요.
+  <p class="hint">
+    ✅ 체크리스트
+    <br>1) 아래 스크립트의 <code>YOUR_APP_KEY</code>를 카카오 개발자 콘솔의 <b>JavaScript 키</b>로 교체
+    <br>2) 개발자 콘솔 &gt; 플랫폼 &gt; Web에 <b>현재 실행 도메인</b>(예: localhost:5500) 등록
+    <br>3) <b>file://</b>로 직접 열지 말고(권장) 간단한 서버로 실행
   </p>
 
   <div class="row">
-    <input id="keyword" placeholder="장소 검색어 (예: 강남역)" />
+    <input id="keyword" placeholder="장소/지역 검색어 (예: 강남역, 판교, 제주특별자치도)" />
     <button id="btnSearch" type="button">검색 후 이동</button>
     <button id="btnMy" type="button">내 위치로 이동</button>
   </div>
+  <div id="status" class="status"></div>
 
   <div id="map" aria-label="kakao map"></div>
 
-  <!-- ✅ Kakao Maps JavaScript SDK 로드
-       appkey=YOUR_APP_KEY 를 실제 JavaScript 키로 교체하세요.
-       libraries=services 는 장소검색(키워드 검색)에 필요합니다. -->
-  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=3ca8f8ca6e23307fccc79051a54d9f4a"></script>
+  <!--
+    ✅ Kakao Maps JavaScript SDK
+    - 반드시 https 권장
+    - libraries=services 는 Places/Geocoder 사용을 위해 필요
+    - autoload=false 로 두고, 로드 완료 후 kakao.maps.load()에서 초기화(레이스 방지)
+  -->
+  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=3ca8f8ca6e23307fccc79051a54d9f4a&libraries=services&autoload=false"></script>
 
   <script>
-    // 1) 초기 지도 생성 (서울 시청 근처)
-    const container = document.getElementById('map');
-    const options = {
-      center: new kakao.maps.LatLng(37.5665, 126.9780),
-      level: 5,
-    };
-    const map = new kakao.maps.Map(container, options);
+    const $ = (sel) => document.querySelector(sel);
+    const statusEl = $('#status');
 
-    // 2) 마커(기본 1개)
-    const marker = new kakao.maps.Marker({
-      position: map.getCenter(),
-    });
-    marker.setMap(map);
-
-    // 3) 지도 클릭 시 마커 이동 + 좌표 표시(콘솔)
-    kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
-      const latlng = mouseEvent.latLng;
-      marker.setPosition(latlng);
-      console.log('클릭 좌표:', latlng.getLat(), latlng.getLng());
-    });
-
-    // 4) 키워드 장소검색으로 지도 이동
-    const ps = new kakao.maps.services.Places();
-
-    function moveToKeyword(keyword) {
-      return new Promise((resolve, reject) => {
-        if (!keyword || !keyword.trim()) {
-          reject(new Error('검색어가 비어있습니다.'));
-          return;
-        }
-        ps.keywordSearch(keyword, (data, status) => {
-          if (status !== kakao.maps.services.Status.OK || !data || data.length === 0) {
-            reject(new Error('검색 결과가 없습니다.'));
-            return;
-          }
-          const first = data[0];
-          const lat = Number(first.y);
-          const lng = Number(first.x);
-          const pos = new kakao.maps.LatLng(lat, lng);
-          map.setCenter(pos);
-          marker.setPosition(pos);
-          resolve({ name: first.place_name, lat, lng });
-        });
-      });
+    function setStatus(msg) {
+      statusEl.textContent = msg || '';
     }
 
-    document.getElementById('btnSearch').addEventListener('click', async () => {
-      try {
-        const keyword = document.getElementById('keyword').value;
-        const result = await moveToKeyword(keyword);
-        console.log('이동:', result);
-      } catch (e) {
-        alert(e.message);
-      }
-    });
+    function explainCommonIssue(e) {
+      // 키/도메인 미등록/파일 실행/네트워크 차단 등은 브라우저 콘솔에 에러가 뜨는 경우가 많습니다.
+      console.warn(e);
+      alert(
+        (e && e.message ? e.message : '동작 중 오류가 발생했습니다.') +
+        '
 
-    // 5) 내 위치로 이동 (브라우저 위치 권한 필요)
-    document.getElementById('btnMy').addEventListener('click', () => {
-      if (!navigator.geolocation) {
-        alert('이 브라우저는 Geolocation을 지원하지 않습니다.');
+추가 확인:' +
+        '
+- 개발자 콘솔에 현재 도메인(예: localhost:5500) 등록했는지' +
+        '
+- JavaScript 키(appkey) 맞는지' +
+        '
+- file:// 로 열지 않고 http(s)로 실행 중인지' +
+        '
+- 브라우저 콘솔(F12)에 Kakao 관련 에러가 있는지'
+      );
+    }
+
+    // SDK 로드 완료 후 초기화
+    kakao.maps.load(() => {
+      // 1) 초기 지도 생성 (서울 시청 근처)
+      const container = document.getElementById('map');
+      const map = new kakao.maps.Map(container, {
+        center: new kakao.maps.LatLng(37.5665, 126.9780),
+        level: 5,
+      });
+
+      // 2) 마커 + 인포윈도우
+      const marker = new kakao.maps.Marker({ position: map.getCenter() });
+      marker.setMap(map);
+
+      const info = new kakao.maps.InfoWindow({
+        content: '<div style="padding:8px 10px; font-size:12px;">여기를 클릭하거나 검색해보세요</div>',
+        removable: true,
+      });
+      info.open(map, marker);
+
+      kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+        const latlng = mouseEvent.latLng;
+        marker.setPosition(latlng);
+        info.setContent(`<div style="padding:8px 10px; font-size:12px;">${latlng.getLat().toFixed(6)}, ${latlng.getLng().toFixed(6)}</div>`);
+        info.open(map, marker);
+      });
+
+      // 3) Places(키워드 검색) + Geocoder(주소 검색) 준비
+      if (!kakao.maps.services) {
+        explainCommonIssue(new Error('services 라이브러리가 로드되지 않았습니다. SDK URL에 libraries=services가 있는지 확인하세요.'));
         return;
       }
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          const my = new kakao.maps.LatLng(lat, lng);
-          map.setCenter(my);
-          marker.setPosition(my);
-        },
-        (err) => {
-          console.warn(err);
-          alert('위치 정보를 가져오지 못했습니다. (권한/HTTPS 여부 확인)');
+
+      const places = new kakao.maps.services.Places();
+      const geocoder = new kakao.maps.services.Geocoder();
+
+      function moveTo(lat, lng, label) {
+        const pos = new kakao.maps.LatLng(lat, lng);
+        map.setCenter(pos);
+        marker.setPosition(pos);
+        if (label) {
+          info.setContent(`<div style="padding:8px 10px; font-size:12px;">${label}</div>`);
+          info.open(map, marker);
         }
-      );
+      }
+
+      // ✅ 1차: Places keywordSearch
+      function searchByPlaces(keyword) {
+        return new Promise((resolve, reject) => {
+          places.keywordSearch(keyword, (data, status) => {
+            if (status === kakao.maps.services.Status.OK && data && data.length) {
+              const first = data[0];
+              const lat = Number(first.y);
+              const lng = Number(first.x);
+              resolve({ lat, lng, label: first.place_name });
+              return;
+            }
+            if (status === kakao.maps.services.Status.ZERO_RESULT) {
+              reject(Object.assign(new Error('Places 검색 결과가 없습니다.'), { code: 'ZERO_RESULT' }));
+              return;
+            }
+            reject(new Error('Places 검색 실패: ' + status));
+          });
+        });
+      }
+
+      // ✅ 2차: 주소/행정구역명 등은 geocoder.addressSearch로 보완
+      function searchByAddress(keyword) {
+        return new Promise((resolve, reject) => {
+          geocoder.addressSearch(keyword, (data, status) => {
+            if (status === kakao.maps.services.Status.OK && data && data.length) {
+              const first = data[0];
+              const lat = Number(first.y);
+              const lng = Number(first.x);
+              resolve({ lat, lng, label: first.address_name || keyword });
+              return;
+            }
+            reject(new Error('주소 검색 결과가 없습니다.'));
+          });
+        });
+      }
+
+      async function moveToKeyword(keyword) {
+        const q = (keyword || '').trim();
+        if (!q) throw new Error('검색어가 비어있습니다.');
+
+        setStatus(`검색 중: ${q}`);
+
+        try {
+          // 1) 장소/키워드 검색
+          return await searchByPlaces(q);
+        } catch (e) {
+          // 장소검색이 0건이면 주소검색으로 재시도
+          if (e && e.code === 'ZERO_RESULT') {
+            return await searchByAddress(q);
+          }
+          throw e;
+        }
+      }
+
+      // 버튼: 검색 후 이동
+      $('#btnSearch').addEventListener('click', async () => {
+        try {
+          const keyword = $('#keyword').value;
+          const result = await moveToKeyword(keyword);
+          moveTo(result.lat, result.lng, result.label);
+          setStatus(`이동 완료: ${result.label} (${result.lat.toFixed(6)}, ${result.lng.toFixed(6)})`);
+        } catch (e) {
+          setStatus('');
+          explainCommonIssue(e);
+        }
+      });
+
+      // Enter로도 검색
+      $('#keyword').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') $('#btnSearch').click();
+      });
+
+      // 버튼: 내 위치
+      $('#btnMy').addEventListener('click', () => {
+        if (!navigator.geolocation) {
+          alert('이 브라우저는 Geolocation을 지원하지 않습니다.');
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            moveTo(lat, lng, '내 위치');
+            setStatus(`내 위치로 이동: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+          },
+          (err) => {
+            console.warn(err);
+            alert('위치 정보를 가져오지 못했습니다. (권한/HTTPS 여부 확인)');
+          }
+        );
+      });
+
+      setStatus('준비 완료. 검색어를 입력하고 버튼을 눌러보세요.');
     });
   </script>
 </body>
