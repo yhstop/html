@@ -12,7 +12,7 @@
     input { padding: 10px 12px; min-width: 260px; }
     button { padding: 10px 12px; cursor: pointer; }
     .hint { color: #555; font-size: 14px; margin: 0 0 12px; }
-    .status { font-size: 13px; color: #333; margin: 8px 0 0; }
+    .status { font-size: 13px; color: #333; margin: 8px 0 0; white-space: pre-wrap; }
     code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
   </style>
 </head>
@@ -36,11 +36,13 @@
 
   <!--
     ✅ Kakao Maps JavaScript SDK
-    - 반드시 https 권장
     - libraries=services 는 Places/Geocoder 사용을 위해 필요
     - autoload=false 로 두고, 로드 완료 후 kakao.maps.load()에서 초기화(레이스 방지)
   -->
-  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=3ca8f8ca6e23307fccc79051a54d9f4a&libraries=services&autoload=false"></script>
+  <script
+    id="kakao-sdk"
+    src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=3ca8f8ca6e23307fccc79051a54d9f4a&libraries=services&autoload=true"
+  ></script>
 
   <script>
     const $ = (sel) => document.querySelector(sel);
@@ -50,164 +52,211 @@
       statusEl.textContent = msg || '';
     }
 
+    // ✅ 가장 흔한 원인(키/도메인/네트워크/CSP/로딩 실패)을 눈에 보이게
     function explainCommonIssue(e) {
-      // 키/도메인 미등록/파일 실행/네트워크 차단 등은 브라우저 콘솔에 에러가 뜨는 경우가 많습니다.
       console.warn(e);
+      const message = (e && e.message) ? e.message : '동작 중 오류가 발생했습니다.';
       alert(
-        (e && e.message ? e.message : '동작 중 오류가 발생했습니다.') +
-        '
+        `${message}
 
-추가 확인:' +
-        '
-- 개발자 콘솔에 현재 도메인(예: localhost:5500) 등록했는지' +
-        '
-- JavaScript 키(appkey) 맞는지' +
-        '
-- file:// 로 열지 않고 http(s)로 실행 중인지' +
-        '
-- 브라우저 콘솔(F12)에 Kakao 관련 에러가 있는지'
+추가 확인:
+` +
+        `- 카카오 콘솔(Web)에 현재 도메인(예: localhost:5500) 등록 여부
+` +
+        `- JavaScript 키(appkey)인지(REST 키 아님)
+` +
+        `- http(s)로 실행 중인지(file:// 아님)
+` +
+        `- 브라우저 콘솔(F12)에 Kakao 관련 에러가 있는지`
       );
     }
 
-    // SDK 로드 완료 후 초기화
-    kakao.maps.load(() => {
-      // 1) 초기 지도 생성 (서울 시청 근처)
-      const container = document.getElementById('map');
-      const map = new kakao.maps.Map(container, {
-        center: new kakao.maps.LatLng(37.5665, 126.9780),
-        level: 5,
-      });
+    // ✅ 전역 JS 에러도 화면에 띄워서 "아예 안 뜸" 상황을 잡기
+    window.addEventListener('error', (evt) => {
+      // SDK 로딩 실패(CSP/네트워크)도 여기로 들어오는 경우가 있습니다.
+      const msg = evt?.message || (evt?.error?.message) || '알 수 없는 오류';
+      setStatus(`에러 발생: ${msg}
+콘솔(F12)에서 상세 원인을 확인하세요.`);
+    });
 
-      // 2) 마커 + 인포윈도우
-      const marker = new kakao.maps.Marker({ position: map.getCenter() });
-      marker.setMap(map);
+    // SDK 자체 로딩 실패 감지
+    document.getElementById('kakao-sdk').addEventListener('error', () => {
+      setStatus('Kakao SDK 로드 실패. 네트워크/CSP 차단 또는 appkey/도메인 설정을 확인하세요.');
+      explainCommonIssue(new Error('Kakao SDK 로드 실패'));
+    });
 
-      const info = new kakao.maps.InfoWindow({
-        content: '<div style="padding:8px 10px; font-size:12px;">여기를 클릭하거나 검색해보세요</div>',
-        removable: true,
-      });
-      info.open(map, marker);
+    function initMapApp() {
+      // 0) SDK 존재 확인
+      if (!window.kakao || !kakao.maps) {
+        throw new Error('kakao.maps가 준비되지 않았습니다. (SDK 로드 실패 또는 차단)');
+      }
 
-      kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
-        const latlng = mouseEvent.latLng;
-        marker.setPosition(latlng);
-        info.setContent(`<div style="padding:8px 10px; font-size:12px;">${latlng.getLat().toFixed(6)}, ${latlng.getLng().toFixed(6)}</div>`);
+      // SDK 로드 완료 후 초기화
+      kakao.maps.load(() => {
+        // 1) 초기 지도 생성 (서울 시청 근처)
+        const container = document.getElementById('map');
+        const map = new kakao.maps.Map(container, {
+          center: new kakao.maps.LatLng(37.5665, 126.9780),
+          level: 5,
+        });
+
+        // 2) 마커 + 인포윈도우
+        const marker = new kakao.maps.Marker({ position: map.getCenter() });
+        marker.setMap(map);
+
+        const info = new kakao.maps.InfoWindow({
+          content: '<div style="padding:8px 10px; font-size:12px;">여기를 클릭하거나 검색해보세요</div>',
+          removable: true,
+        });
         info.open(map, marker);
-      });
 
-      // 3) Places(키워드 검색) + Geocoder(주소 검색) 준비
-      if (!kakao.maps.services) {
-        explainCommonIssue(new Error('services 라이브러리가 로드되지 않았습니다. SDK URL에 libraries=services가 있는지 확인하세요.'));
+        kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+          const latlng = mouseEvent.latLng;
+          marker.setPosition(latlng);
+          info.setContent(`<div style="padding:8px 10px; font-size:12px;">${latlng.getLat().toFixed(6)}, ${latlng.getLng().toFixed(6)}</div>`);
+          info.open(map, marker);
+        });
+
+        // 3) Places(키워드 검색) + Geocoder(주소 검색) 준비
+        if (!kakao.maps.services) {
+          explainCommonIssue(new Error('services 라이브러리가 로드되지 않았습니다. SDK URL에 libraries=services가 있는지 확인하세요.'));
+          return;
+        }
+
+        const places = new kakao.maps.services.Places();
+        const geocoder = new kakao.maps.services.Geocoder();
+
+        function moveTo(lat, lng, label) {
+          const pos = new kakao.maps.LatLng(lat, lng);
+          map.setCenter(pos);
+          marker.setPosition(pos);
+          if (label) {
+            info.setContent(`<div style="padding:8px 10px; font-size:12px;">${label}</div>`);
+            info.open(map, marker);
+          }
+        }
+
+        // ✅ 1차: Places keywordSearch
+        function searchByPlaces(keyword) {
+          return new Promise((resolve, reject) => {
+            places.keywordSearch(keyword, (data, status) => {
+              if (status === kakao.maps.services.Status.OK && data && data.length) {
+                const first = data[0];
+                resolve({
+                  lat: Number(first.y),
+                  lng: Number(first.x),
+                  label: first.place_name,
+                });
+                return;
+              }
+              if (status === kakao.maps.services.Status.ZERO_RESULT) {
+                reject(Object.assign(new Error('Places 검색 결과가 없습니다.'), { code: 'ZERO_RESULT' }));
+                return;
+              }
+              reject(new Error('Places 검색 실패: ' + status));
+            });
+          });
+        }
+
+        // ✅ 2차: 주소/행정구역명 등은 geocoder.addressSearch로 보완
+        function searchByAddress(keyword) {
+          return new Promise((resolve, reject) => {
+            geocoder.addressSearch(keyword, (data, status) => {
+              if (status === kakao.maps.services.Status.OK && data && data.length) {
+                const first = data[0];
+                resolve({
+                  lat: Number(first.y),
+                  lng: Number(first.x),
+                  label: first.address_name || keyword,
+                });
+                return;
+              }
+              reject(new Error('주소 검색 결과가 없습니다.'));
+            });
+          });
+        }
+
+        async function moveToKeyword(keyword) {
+          const q = (keyword || '').trim();
+          if (!q) throw new Error('검색어가 비어있습니다.');
+
+          setStatus(`검색 중: ${q}`);
+
+          try {
+            return await searchByPlaces(q);
+          } catch (e) {
+            if (e && e.code === 'ZERO_RESULT') {
+              return await searchByAddress(q);
+            }
+            throw e;
+          }
+        }
+
+        // 버튼: 검색 후 이동
+        $('#btnSearch').addEventListener('click', async () => {
+          try {
+            const keyword = $('#keyword').value;
+            const result = await moveToKeyword(keyword);
+            moveTo(result.lat, result.lng, result.label);
+            setStatus(`이동 완료: ${result.label}
+(${result.lat.toFixed(6)}, ${result.lng.toFixed(6)})`);
+          } catch (e) {
+            setStatus('');
+            explainCommonIssue(e);
+          }
+        });
+
+        // Enter로도 검색
+        $('#keyword').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') $('#btnSearch').click();
+        });
+
+        // 버튼: 내 위치
+        $('#btnMy').addEventListener('click', () => {
+          if (!navigator.geolocation) {
+            alert('이 브라우저는 Geolocation을 지원하지 않습니다.');
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const lat = pos.coords.latitude;
+              const lng = pos.coords.longitude;
+              moveTo(lat, lng, '내 위치');
+              setStatus(`내 위치로 이동
+${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+            },
+            (err) => {
+              console.warn(err);
+              alert('위치 정보를 가져오지 못했습니다. (권한/HTTPS 여부 확인)');
+            }
+          );
+        });
+
+        setStatus('준비 완료. 검색어를 입력하고 버튼을 눌러보세요.');
+      });
+    }
+
+    // ✅ SDK 로딩 타이밍/차단 이슈를 방어: 준비될 때까지 잠깐 재시도
+    (function waitForKakao(retry = 0) {
+      if (window.kakao && window.kakao.maps) {
+        try {
+          initMapApp();
+        } catch (e) {
+          setStatus('초기화 실패: ' + (e.message || e));
+          explainCommonIssue(e);
+        }
         return;
       }
 
-      const places = new kakao.maps.services.Places();
-      const geocoder = new kakao.maps.services.Geocoder();
-
-      function moveTo(lat, lng, label) {
-        const pos = new kakao.maps.LatLng(lat, lng);
-        map.setCenter(pos);
-        marker.setPosition(pos);
-        if (label) {
-          info.setContent(`<div style="padding:8px 10px; font-size:12px;">${label}</div>`);
-          info.open(map, marker);
-        }
+      if (retry >= 60) {
+        // 약 6초(100ms * 60) 기다렸는데도 안 되면 로딩 실패로 간주
+        setStatus('Kakao SDK가 준비되지 않았습니다.네트워크/CSP 차단 또는 appkey/도메인 설정을 확인하세요.');
+        return;
       }
 
-      // ✅ 1차: Places keywordSearch
-      function searchByPlaces(keyword) {
-        return new Promise((resolve, reject) => {
-          places.keywordSearch(keyword, (data, status) => {
-            if (status === kakao.maps.services.Status.OK && data && data.length) {
-              const first = data[0];
-              const lat = Number(first.y);
-              const lng = Number(first.x);
-              resolve({ lat, lng, label: first.place_name });
-              return;
-            }
-            if (status === kakao.maps.services.Status.ZERO_RESULT) {
-              reject(Object.assign(new Error('Places 검색 결과가 없습니다.'), { code: 'ZERO_RESULT' }));
-              return;
-            }
-            reject(new Error('Places 검색 실패: ' + status));
-          });
-        });
-      }
-
-      // ✅ 2차: 주소/행정구역명 등은 geocoder.addressSearch로 보완
-      function searchByAddress(keyword) {
-        return new Promise((resolve, reject) => {
-          geocoder.addressSearch(keyword, (data, status) => {
-            if (status === kakao.maps.services.Status.OK && data && data.length) {
-              const first = data[0];
-              const lat = Number(first.y);
-              const lng = Number(first.x);
-              resolve({ lat, lng, label: first.address_name || keyword });
-              return;
-            }
-            reject(new Error('주소 검색 결과가 없습니다.'));
-          });
-        });
-      }
-
-      async function moveToKeyword(keyword) {
-        const q = (keyword || '').trim();
-        if (!q) throw new Error('검색어가 비어있습니다.');
-
-        setStatus(`검색 중: ${q}`);
-
-        try {
-          // 1) 장소/키워드 검색
-          return await searchByPlaces(q);
-        } catch (e) {
-          // 장소검색이 0건이면 주소검색으로 재시도
-          if (e && e.code === 'ZERO_RESULT') {
-            return await searchByAddress(q);
-          }
-          throw e;
-        }
-      }
-
-      // 버튼: 검색 후 이동
-      $('#btnSearch').addEventListener('click', async () => {
-        try {
-          const keyword = $('#keyword').value;
-          const result = await moveToKeyword(keyword);
-          moveTo(result.lat, result.lng, result.label);
-          setStatus(`이동 완료: ${result.label} (${result.lat.toFixed(6)}, ${result.lng.toFixed(6)})`);
-        } catch (e) {
-          setStatus('');
-          explainCommonIssue(e);
-        }
-      });
-
-      // Enter로도 검색
-      $('#keyword').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') $('#btnSearch').click();
-      });
-
-      // 버튼: 내 위치
-      $('#btnMy').addEventListener('click', () => {
-        if (!navigator.geolocation) {
-          alert('이 브라우저는 Geolocation을 지원하지 않습니다.');
-          return;
-        }
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-            moveTo(lat, lng, '내 위치');
-            setStatus(`내 위치로 이동: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-          },
-          (err) => {
-            console.warn(err);
-            alert('위치 정보를 가져오지 못했습니다. (권한/HTTPS 여부 확인)');
-          }
-        );
-      });
-
-      setStatus('준비 완료. 검색어를 입력하고 버튼을 눌러보세요.');
-    });
+      setStatus(`SDK 로딩 대기 중... (${retry + 1}/60)`);
+      setTimeout(() => waitForKakao(retry + 1), 100);
+    })();
   </script>
 </body>
 </html>
