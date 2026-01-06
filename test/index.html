@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>부산 맛집 정보</title>
+  <link rel="stylesheet" href="./styles.css" />
+
+  <!-- Kakao Maps SDK: 본인 appkey로 교체 -->
+  <script
+    src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_KAKAO_JAVASCRIPT_KEY"
+    defer
+  ></script>
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <h1 class="brand">부산 맛집</h1>
+
+      <div class="search">
+        <input id="searchInput" type="search" placeholder="가게명/메뉴/주소 검색" />
+        <button id="searchBtn" class="iconBtn" title="검색">🔎</button>
+      </div>
+
+      <div class="filters">
+        <select id="gugunSelect">
+          <option value="">전체 구/군</option>
+        </select>
+
+        <select id="rowsSelect">
+          <option value="10">10개</option>
+          <option value="20" selected>20개</option>
+          <option value="50">50개</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- LEFT: 리스트 -->
+    <section class="panel listPanel">
+      <div class="panel__head">
+        <div class="panel__title">맛집 목록</div>
+        <div class="panel__meta">
+          <span id="countText">0개</span>
+          <div class="pager">
+            <button id="prevBtn" class="btn">이전</button>
+            <span id="pageText">1</span>
+            <button id="nextBtn" class="btn">다음</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="list" class="list"></div>
+
+      <div id="listLoading" class="loading hidden">불러오는 중…</div>
+      <div id="listError" class="error hidden"></div>
+    </section>
+
+    <!-- RIGHT: 상세 -->
+    <section class="panel detailPanel">
+      <div id="emptyDetail" class="empty">
+        왼쪽 목록에서 맛집을 선택해 주세요 🙂
+      </div>
+
+      <article id="detail" class="detail hidden">
+        <div class="detail__media">
+          <button id="favBtn" class="fav" title="찜">♡</button>
+          <img id="detailImg" alt="" />
+        </div>
+
+        <div class="detail__body">
+          <div class="kv">
+            <div class="kv__key">상호명</div>
+            <div class="kv__val" id="dTitle">-</div>
+          </div>
+
+          <div class="kv">
+            <div class="kv__key">주소</div>
+            <div class="kv__val" id="dAddr">-</div>
+          </div>
+
+          <div class="kv">
+            <div class="kv__key">소개</div>
+            <div class="kv__val" id="dDesc">-</div>
+          </div>
+
+          <div class="kv">
+            <div class="kv__key">대표메뉴</div>
+            <div class="kv__val" id="dMenu">-</div>
+          </div>
+
+          <div class="kv">
+            <div class="kv__key">문의</div>
+            <div class="kv__val" id="dTel">-</div>
+          </div>
+
+          <div class="kv">
+            <div class="kv__key">운영시간</div>
+            <div class="kv__val" id="dTime">-</div>
+          </div>
+
+          <div class="mapWrap">
+            <div class="mapTitle">지도</div>
+            <div id="map" class="map"></div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__inner">
+      데이터 출처: 공공데이터포털(부산광역시_부산맛집정보)
+    </div>
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>

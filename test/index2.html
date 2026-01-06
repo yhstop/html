@@ -1,0 +1,1018 @@
+<!--
+  부산광역시_부산 맛집 정보 서비스 (시안 기반)
+  - HTML/CSS/JS ONLY
+  - Data: https://apis.data.go.kr/6260000/FoodService/getFoodKr
+  - Map: Kakao Maps JS SDK
+
+  사용 방법
+  1) 이 파일을 index.html 로 저장
+  2) 아래 YOUR_* 키 값을 본인 키로 교체
+     - YOUR_DATA_GO_KR_SERVICE_KEY: 공공데이터포털 일반 인증키(Decoding 권장)
+     - YOUR_KAKAO_JAVASCRIPT_KEY: 카카오 JavaScript 키
+  3) 로컬 실행은 Live Server 등 HTTP 서버로 실행 (file:// 실행 X)
+-->
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>부산 맛집 정보</title>
+
+  <!-- Kakao Maps SDK: 본인 appkey로 교체 -->
+  <!--
+    Kakao Maps SDK
+    - autoload=false 로 두고, JS에서 kakao.maps.load()로 초기화 타이밍을 제어합니다.
+    - (중요) defer 상태에서 inline script가 먼저 실행되면 kakao 객체가 없어 지도가 안 뜨는 문제가 자주 발생합니다.
+  -->
+  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=3ca8f8ca6e23307fccc79051a54d9f4a&autoload=false"></script>
+
+  <style>
+    :root{
+      --bg:#f6f7fb;
+      --panel:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --line:#e2e8f0;
+      --chip:#f1f5f9;
+      --shadow: 0 10px 30px rgba(15, 23, 42, .08);
+      --radius: 16px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", Arial;
+      color:var(--text);
+      background:var(--bg);
+    }
+
+    .topbar{
+      position:sticky; top:0; z-index:10;
+      background:rgba(246,247,251,.9);
+      backdrop-filter: blur(12px);
+      border-bottom:1px solid var(--line);
+    }
+    .topbar__inner{
+      max-width:1200px;
+      margin:0 auto;
+      padding:14px 16px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+    }
+    .brand{
+      margin:0;
+      font-size:18px;
+      letter-spacing:-.2px;
+      white-space:nowrap;
+    }
+    .search{
+      flex:1;
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .search input{
+      width:100%;
+      height:40px;
+      padding:0 12px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      background:#fff;
+      outline:none;
+    }
+    .search input:focus{ border-color:#94a3b8; }
+    .iconBtn{
+      width:40px; height:40px;
+      border:1px solid var(--line);
+      background:#fff;
+      border-radius:999px;
+      cursor:pointer;
+    }
+    .filters{ display:flex; gap:8px; }
+    select{
+      height:40px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:0 12px;
+      background:#fff;
+    }
+
+    .layout{
+      max-width:1200px;
+      margin:16px auto;
+      padding:0 16px 20px;
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap:16px;
+    }
+
+    .panel{
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+      min-height: calc(100vh - 140px);
+    }
+    .panel__head{
+      padding:14px 14px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+    }
+    .panel__title{ font-weight:700; letter-spacing:-.2px; }
+    .panel__meta{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      color:var(--muted);
+      font-size:13px;
+    }
+    .pager{ display:flex; align-items:center; gap:8px; }
+    .btn{
+      height:34px;
+      padding:0 10px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:#fff;
+      cursor:pointer;
+    }
+
+    .list{
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .card{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:12px;
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:10px;
+      cursor:pointer;
+      transition: transform .08s ease, border-color .12s ease;
+      background:#fff;
+    }
+    .card:hover{ transform: translateY(-1px); border-color:#cbd5e1; }
+    .card__title{ font-weight:800; letter-spacing:-.3px; margin:0 0 6px; }
+    .card__sub{ margin:0; color:var(--muted); font-size:13px; line-height:1.35; }
+    .card__chips{ margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
+    .chip{
+      background:var(--chip);
+      border:1px solid var(--line);
+      color:#334155;
+      font-size:12px;
+      padding:4px 8px;
+      border-radius:999px;
+    }
+
+    .card__actions{ display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+    .heart{ border:none; background:transparent; font-size:20px; cursor:pointer; color:#0f172a; }
+    .miniIcon{ width:34px; height:34px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+
+    .detail{ display:grid; grid-template-rows: 320px 1fr; }
+    .detail__media{ position:relative; background:#0b1220; }
+    .detail__media img{ width:100%; height:100%; object-fit:cover; display:block; opacity:.95; }
+    .fav{
+      position:absolute;
+      left:14px; top:14px;
+      width:44px; height:44px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.25);
+      background:rgba(0,0,0,.35);
+      color:#fff;
+      font-size:22px;
+      cursor:pointer;
+    }
+    .detail__body{ padding:14px; display:flex; flex-direction:column; gap:10px; }
+    .kv{ display:grid; grid-template-columns: 90px 1fr; gap:10px; align-items:flex-start; }
+    .kv__key{
+      display:inline-flex;
+      justify-content:center;
+      align-items:center;
+      height:28px;
+      border-radius:8px;
+      background:#0f172a;
+      color:#fff;
+      font-size:12px;
+      font-weight:700;
+    }
+    .kv__val{ padding-top:2px; line-height:1.5; color:#0f172a; }
+
+    .mapWrap{ margin-top:6px; border-top:1px solid var(--line); padding-top:10px; }
+    .mapTitle{ font-weight:800; margin-bottom:8px; }
+    .map{ width:100%; height:260px; border-radius:14px; border:1px solid var(--line); overflow:hidden; }
+
+    .empty{ padding:18px; color:var(--muted); }
+    .loading, .error{ padding:12px 14px; color:var(--muted); }
+    .error{ color:#b91c1c; }
+    .hidden{ display:none !important; }
+
+    .footer{ padding:14px 0 22px; color:var(--muted); font-size:12px; text-align:center; }
+
+    @media (max-width: 980px){
+      .layout{ grid-template-columns: 1fr; }
+      .panel{ min-height:auto; }
+      .detail{ grid-template-rows: 260px 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <h1 class="brand">부산 맛집</h1>
+
+      <div class="search">
+        <input id="searchInput" type="search" placeholder="가게명/메뉴/주소 검색" />
+        <button id="searchBtn" class="iconBtn" title="검색">🔎</button>
+      </div>
+
+      <div class="filters">
+        <select id="gugunSelect">
+          <option value="">전체 구/군</option>
+        </select>
+
+        <select id="rowsSelect">
+          <option value="10" selected>10개</option>
+          <option value="20">20개</option>
+          <option value="50">50개</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel listPanel">
+      <div class="panel__head">
+        <div class="panel__title">맛집 목록</div>
+        <div class="panel__meta">
+          <span id="countText">0개</span>
+          <div class="pager">
+            <button id="prevBtn" class="btn">이전</button>
+            <span id="pageText">1</span>
+            <button id="nextBtn" class="btn">다음</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="list" class="list"></div>
+
+      <div id="listLoading" class="loading hidden">불러오는 중…</div>
+      <div id="listError" class="error hidden"></div>
+    </section>
+
+    <section class="panel detailPanel">
+      <div id="emptyDetail" class="empty">
+        왼쪽 목록에서 맛집을 선택해 주세요 🙂
+      </div>
+
+      <article id="detail" class="detail hidden">
+        <div class="detail__media">
+          <button id="favBtn" class="fav" title="찜">♡</button>
+          <img id="detailImg" alt="" />
+        </div>
+
+        <div class="detail__body">
+          <div class="kv">
+            <div class="kv__key">상호명</div>
+            <div class="kv__val" id="dTitle">-</div>
+          </div>
+
+          <div class="kv">
+            <div class="kv__key">주소</div>
+            <div class="kv__val" id="dAddr">-</div>
+          </div>
+
+          <div class="kv">
+            <div class="kv__key">소개</div>
+            <div class="kv__val" id="dDesc">-</div>
+          </div>
+
+          <div class="kv">
+            <div class="kv__key">대표메뉴</div>
+            <div class="kv__val" id="dMenu">-</div>
+          </div>
+
+          <div class="kv">
+            <div class="kv__key">문의</div>
+            <div class="kv__val" id="dTel">-</div>
+          </div>
+
+          <div class="kv">
+            <div class="kv__key">운영시간</div>
+            <div class="kv__val" id="dTime">-</div>
+          </div>
+
+          <div class="mapWrap">
+            <div class="mapTitle">지도</div>
+            <div id="map" class="map"></div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__inner">데이터 출처: 공공데이터포털(부산광역시_부산맛집정보)</div>
+  </footer>
+
+  <script>
+    // -------------------- Config --------------------
+    const API_BASE = "https://apis.data.go.kr/6260000/FoodService/getFoodKr";
+
+    // ✅ (선택) CORS가 막혀 브라우저에서 직접 호출이 실패하면, 프록시를 통해 우회해야 합니다.
+    // - 아래 PROXY_PREFIX를 비워두면("") 직접 호출만 시도합니다.
+    // - 예: corsproxy.io 는 "https://corsproxy.io/?" 처럼 사용합니다. (외부 서비스라 환경에 따라 막힐 수 있음)
+    // - 가장 안정적인 방법: 본인 서버/서버리스(Worker 등)로 프록시를 하나 두는 것
+    const PROXY_PREFIX = ""; // 예: "https://corsproxy.io/?"
+
+    // ✅ 개발/디자인 확인용: API 호출이 실패하면 샘플 데이터로 화면을 볼 수 있게 합니다.
+    let FORCE_SAMPLE_MODE = false;
+
+    // ✅ 여기에 공공데이터포털 인증키(serviceKey)를 넣으세요.
+// - 권장: Decoding(일반) 키를 넣으면 자동으로 URL 인코딩해서 호출합니다.
+// - 만약 Encoding(이미 %로 인코딩된) 키를 넣는다면, "%"가 포함된 키는 추가 인코딩 없이 그대로 전송합니다.
+const SERVICE_KEY = "U3rjn1OQzoe833jk5RJokTl1sVFUmIQp7dGTZl0tcvNU7p2blLzjccSSgrAHQgyLYlBIm7Qt0wOFwQRvvG7h8Q==";
+
+    let state = {
+      pageNo: 1,
+      numOfRows: 10,
+      keyword: "",
+      gugun: "",
+      items: [],
+      totalCount: 0,
+      selected: null
+    };
+
+    let kakaoMap = null;
+    let kakaoMarker = null;
+
+    const $ = (sel) => document.querySelector(sel);
+
+    const elList = $("#list");
+    const elCount = $("#countText");
+    const elPage = $("#pageText");
+    const elLoading = $("#listLoading");
+    const elError = $("#listError");
+
+    const elEmptyDetail = $("#emptyDetail");
+    const elDetail = $("#detail");
+
+    const elSearchInput = $("#searchInput");
+    const elSearchBtn = $("#searchBtn");
+    const elGugun = $("#gugunSelect");
+    const elRows = $("#rowsSelect");
+    const elPrev = $("#prevBtn");
+    const elNext = $("#nextBtn");
+
+    const elFav = $("#favBtn");
+    const elImg = $("#detailImg");
+    const elDTitle = $("#dTitle");
+    const elDAddr = $("#dAddr");
+    const elDDesc = $("#dDesc");
+    const elDMenu = $("#dMenu");
+    const elDTel = $("#dTel");
+    const elDTime = $("#dTime");
+    // ✅ 카카오 SDK 로드 타이밍 문제를 피하려고, DOM 준비 + kakao.maps.load() 완료 후에만 init을 실행합니다.
+    bootstrap();
+
+    async function bootstrap() {
+      if (document.readyState === "loading") {
+        await new Promise((r) => document.addEventListener("DOMContentLoaded", r, { once: true }));
+      }
+
+      try {
+        await ensureKakaoReady();
+      } catch (e) {
+        // SDK 로드 실패 시에도 목록은 동작하도록 둠
+        console.warn("Kakao Maps SDK not ready:", e);
+      }
+
+      init();
+    }
+
+    function init() {
+      elRows.value = String(state.numOfRows);
+
+      elSearchBtn.addEventListener("click", () => {
+        state.keyword = (elSearchInput.value || "").trim();
+        state.pageNo = 1;
+        renderList();
+      });
+
+      elSearchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") elSearchBtn.click();
+      });
+
+      elRows.addEventListener("change", () => {
+        state.numOfRows = Number(elRows.value);
+        state.pageNo = 1;
+        renderList();
+      });
+
+      elGugun.addEventListener("change", () => {
+        state.gugun = elGugun.value;
+        state.pageNo = 1;
+        renderList();
+      });
+
+      elPrev.addEventListener("click", () => {
+        if (state.pageNo > 1) {
+          state.pageNo -= 1;
+          renderList();
+        }
+      });
+
+      elNext.addEventListener("click", () => {
+        const lastPage = state.totalCount
+          ? Math.ceil(state.totalCount / state.numOfRows)
+          : state.pageNo + 1;
+
+        if (state.pageNo < lastPage) {
+          state.pageNo += 1;
+          renderList();
+        }
+      });
+
+      elFav.addEventListener("click", async () => {
+        if (!state.selected) return;
+        toggleFavorite(state.selected.UC_SEQ);
+        await renderDetail(state.selected);
+      });
+
+      renderList();
+    }
+
+    // -------------------- Render List --------------------
+    async function renderList() {
+      setListStatus({ loading: true, error: "" });
+
+      try {
+        const data = await fetchFoodList(state.pageNo, state.numOfRows);
+        const rawItems = normalizeItems(data);
+        state.totalCount = Number(data?.getFoodKr?.totalCount || data?.totalCount || 0);
+
+        fillGugunOptionsOnce(rawItems);
+
+        const filtered = rawItems.filter((it) => {
+          const matchesGugun = state.gugun ? (it.GUGUN_NM === state.gugun) : true;
+          const matchesKeyword = state.keyword
+            ? textBlob(it).includes(state.keyword.toLowerCase())
+            : true;
+          return matchesGugun && matchesKeyword;
+        });
+
+        state.items = filtered;
+        elCount.textContent = `${filtered.length}개`;
+        elPage.textContent = `${state.pageNo}`;
+
+        elList.innerHTML = filtered.map(cardTemplate).join("");
+
+        // 카드 클릭 -> 상세
+        elList.querySelectorAll("[data-ucseq]").forEach((card) => {
+          card.addEventListener("click", async (e) => {
+            const target = e.target;
+            if (target.closest("button")) return;
+
+            const ucSeq = card.getAttribute("data-ucseq");
+            await openDetail(ucSeq);
+          });
+        });
+
+        // 찜 버튼
+        elList.querySelectorAll("[data-fav]").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const ucSeq = btn.getAttribute("data-fav");
+            toggleFavorite(ucSeq);
+            btn.textContent = isFavorite(ucSeq) ? "♥" : "♡";
+          });
+        });
+
+        // 지도 버튼(상세 열기)
+        elList.querySelectorAll("[data-map]").forEach((btn) => {
+          btn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const ucSeq = btn.getAttribute("data-map");
+            await openDetail(ucSeq);
+            $("#detail").scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+        });
+
+        setListStatus({ loading: false, error: "" });
+
+        // 에러 영역 버튼 이벤트는 1회만 걸어둡니다.
+        bindErrorActionsOnce();
+      } catch (err) {
+        console.error(err);
+        setListStatus({ loading: false, error: formatErr(err) + extraHelpForAuth(err) + extraHelpForCors(err) });
+
+        // 에러 영역 버튼(샘플 모드) 이벤트는 1회만 걸어둡니다.
+        bindErrorActionsOnce();
+      }
+    }
+
+    // -------------------- Detail --------------------
+    async function openDetail(ucSeq) {
+      try {
+        const data = await fetchFoodDetail(ucSeq);
+        const item = normalizeItems(data)[0] || state.items.find((x) => String(x.UC_SEQ) === String(ucSeq));
+
+        if (!item) throw new Error("상세 데이터를 찾을 수 없습니다.");
+
+        state.selected = item;
+        await renderDetail(item);
+      } catch (err) {
+        console.error(err);
+        alert("상세 로드 실패: " + formatErr(err));
+      }
+    }
+
+    async function renderDetail(item) {
+      elEmptyDetail.classList.add("hidden");
+      elDetail.classList.remove("hidden");
+
+      const imgUrl =
+        item.MAIN_IMG_NORMAL ||
+        item.MAIN_IMG_THUMB ||
+        item.IMG_URL ||
+        item.MAIN_IMG ||
+        "";
+
+      elImg.src = imgUrl || placeholderImage();
+      elImg.alt = item.MAIN_TITLE || item.TITLE || "맛집 이미지";
+
+      elDTitle.textContent = item.MAIN_TITLE || "-";
+      elDAddr.textContent = item.ADDR1 || item.ADDR || "-";
+      elDDesc.textContent = (item.ITEMCNTNTS || item.SUBTITLE || item.TITLE || "-").trim();
+      elDMenu.textContent = item.RPRSNTV_MENU || item.MENU || "-";
+      elDTel.textContent = item.CNTCT_TEL || item.TEL || "-";
+      elDTime.textContent = item.USAGE_DAY_WEEK_AND_TIME || item.USAGE_TIME || "-";
+
+      elFav.textContent = isFavorite(item.UC_SEQ) ? "♥" : "♡";
+
+      const lat = Number(item.LAT);
+      const lng = Number(item.LNG);
+            if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        await renderKakaoMap(lat, lng, item.MAIN_TITLE || "선택한 위치");
+      } else {
+        $("#map").innerHTML = `<div style="padding:12px;color:#64748b;">좌표 정보(LAT/LNG)가 없어 지도를 표시할 수 없어요.</div>`;
+      }
+    }
+
+    // -------------------- API --------------------
+    async function fetchFoodList(pageNo, numOfRows) {
+      if (FORCE_SAMPLE_MODE) {
+        return sampleResponse(pageNo, numOfRows);
+      }
+
+      const directUrl = buildUrl({
+        serviceKey: SERVICE_KEY,
+        pageNo,
+        numOfRows,
+        resultType: "json"
+      });
+
+      const url = PROXY_PREFIX ? (PROXY_PREFIX + directUrl) : directUrl;
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        const body = await safeReadText(res);
+        const err = new Error(`HTTP ${res.status}`);
+        err.status = res.status;
+        err.url = directUrl; // 원본 URL(마스킹해서 보여줌)
+        err.body = body;
+        throw err;
+      }
+
+      // 일부 프록시는 content-type이 이상할 수 있어 text->json fallback
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        // JSON 파싱 실패 시 원문을 에러로 보여주기
+        const err = new Error("응답 JSON 파싱 실패");
+        err.status = 0;
+        err.url = directUrl;
+        err.body = text;
+        throw err;
+      }
+    }
+
+    async function fetchFoodDetail(ucSeq) {
+      if (FORCE_SAMPLE_MODE) {
+        const found = SAMPLE_ITEMS.find((x) => String(x.UC_SEQ) === String(ucSeq));
+        return { getFoodKr: { item: found ? [found] : [] } };
+      }
+
+      const directUrl = buildUrl({
+        serviceKey: SERVICE_KEY,
+        pageNo: 1,
+        numOfRows: 1,
+        resultType: "json",
+        UC_SEQ: ucSeq
+      });
+
+      const url = PROXY_PREFIX ? (PROXY_PREFIX + directUrl) : directUrl;
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        const body = await safeReadText(res);
+        const err = new Error(`HTTP ${res.status}`);
+        err.status = res.status;
+        err.url = directUrl;
+        err.body = body;
+        throw err;
+      }
+
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        const err = new Error("응답 JSON 파싱 실패");
+        err.status = 0;
+        err.url = directUrl;
+        err.body = text;
+        throw err;
+      }
+    }
+
+    function buildUrl(params) {
+      // ⚠️ 401(Unauthorized) 가장 흔한 원인: serviceKey 인코딩 문제
+      // - Encoding 키(이미 %로 인코딩된 키)를 URLSearchParams로 다시 인코딩하면 "이중 인코딩"이 되어 401이 날 수 있어요.
+      // - 그래서 serviceKey는 "이미 인코딩된 키인지" 검사 후, 필요할 때만 encodeURIComponent를 적용합니다.
+      const { serviceKey, ...rest } = params;
+
+      const usp = new URLSearchParams();
+      Object.entries(rest).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "") usp.append(k, String(v));
+      });
+
+      const sk = normalizeServiceKey(serviceKey);
+      const qs = usp.toString();
+      return `${API_BASE}?serviceKey=${sk}${qs ? `&${qs}` : ""}`;
+    }
+
+    function normalizeServiceKey(key) {
+      if (!key) return "";
+      // 이미 %HH 형태가 포함되어 있으면(Encoding 키) 추가 인코딩 없이 그대로 사용
+      if (/%[0-9A-Fa-f]{2}/.test(key)) return key;
+      // 그 외(Decoding 키)는 안전하게 인코딩
+      return encodeURIComponent(key);
+    }
+
+    function normalizeItems(data) {
+      const root = data?.getFoodKr || data?.response?.body || data;
+      const items =
+        root?.item ||
+        root?.items ||
+        root?.body?.items ||
+        root?.body?.item ||
+        [];
+
+      if (Array.isArray(items)) return items;
+      if (items && typeof items === "object") return [items];
+      return [];
+    }
+
+    // -------------------- UI Helpers --------------------
+    function cardTemplate(it) {
+      const title = it.MAIN_TITLE || "이름 없음";
+      const addr = it.ADDR1 || "-";
+      const menu = it.RPRSNTV_MENU || it.MENU || "-";
+      const gugun = it.GUGUN_NM || "구/군";
+      const ucSeq = it.UC_SEQ;
+
+      return `
+        <div class="card" data-ucseq="${escapeHtml(String(ucSeq))}">
+          <div>
+            <div class="card__title">${escapeHtml(title)}</div>
+            <p class="card__sub">주소: ${escapeHtml(addr)}</p>
+            <p class="card__sub">메뉴: ${escapeHtml(menu)}</p>
+            <div class="card__chips">
+              <span class="chip">${escapeHtml(gugun)}</span>
+            </div>
+          </div>
+
+          <div class="card__actions">
+            <button class="heart" data-fav="${escapeHtml(String(ucSeq))}" title="찜">
+              ${isFavorite(ucSeq) ? "♥" : "♡"}
+            </button>
+            <button class="miniIcon" data-map="${escapeHtml(String(ucSeq))}" title="지도 보기">📍</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function setListStatus({ loading, error }) {
+      elLoading.classList.toggle("hidden", !loading);
+      elError.classList.toggle("hidden", !error);
+
+      // textContent 대신 HTML을 써서 버튼/링크를 표시합니다.
+      // (보안) 에러 메시지는 우리가 만든 문자열만 넣습니다.
+      elError.innerHTML = error ? `<pre style="margin:0;white-space:pre-wrap;font-family:inherit;">${escapeHtml(error)}</pre>
+<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+  <button id="useSampleBtn" class="btn" type="button">샘플 데이터로 화면 보기</button>
+  <button id="retryBtn" class="btn" type="button">다시 시도</button>
+</div>` : "";
+    }
+
+    function textBlob(it) {
+      return [
+        it.MAIN_TITLE,
+        it.ADDR1,
+        it.RPRSNTV_MENU,
+        it.TITLE,
+        it.SUBTITLE,
+        it.GUGUN_NM
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+    }
+
+    function fillGugunOptionsOnce(items) {
+      if (elGugun.options.length > 1) return;
+
+      const set = new Set(items.map((x) => x.GUGUN_NM).filter(Boolean));
+      [...set].sort().forEach((g) => {
+        const opt = document.createElement("option");
+        opt.value = g;
+        opt.textContent = g;
+        elGugun.appendChild(opt);
+      });
+    }
+
+    // -------------------- Favorites (localStorage) --------------------
+    const FAV_KEY = "busan_food_favs_v1";
+
+    function getFavSet() {
+      try {
+        const raw = localStorage.getItem(FAV_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set(arr.map(String));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveFavSet(set) {
+      localStorage.setItem(FAV_KEY, JSON.stringify([...set]));
+    }
+
+    function isFavorite(ucSeq) {
+      const set = getFavSet();
+      return set.has(String(ucSeq));
+    }
+
+    function toggleFavorite(ucSeq) {
+      const set = getFavSet();
+      const key = String(ucSeq);
+      if (set.has(key)) set.delete(key);
+      else set.add(key);
+      saveFavSet(set);
+    }
+
+    // -------------------- Kakao Map --------------------
+    async function renderKakaoMap(lat, lng, title) {
+      const container = $("#map");
+
+      // 1) SDK 로드/초기화 보장
+      try {
+        await ensureKakaoReady();
+      } catch {
+        container.innerHTML = `<div style="padding:12px;color:#64748b;">카카오맵 SDK가 준비되지 않았어요.<br/>- appkey가 올바른지<br/>- 카카오 개발자 콘솔에서 <b>플랫폼(Web) 도메인</b> 등록이 되었는지<br/>확인해 주세요.</div>`;
+        return;
+      }
+
+      // 2) 상세 패널이 막 열리는 순간에는 map div 크기 계산이 0일 수 있어 relayout이 필요합니다.
+      await new Promise((r) => requestAnimationFrame(r));
+
+      const pos = new kakao.maps.LatLng(lat, lng);
+
+      if (!kakaoMap) {
+        kakaoMap = new kakao.maps.Map(container, { center: pos, level: 3 });
+        kakaoMarker = new kakao.maps.Marker({ position: pos });
+        kakaoMarker.setMap(kakaoMap);
+      } else {
+        kakaoMap.relayout();
+        kakaoMap.setCenter(pos);
+        kakaoMarker.setPosition(pos);
+      }
+
+      const iwContent = `<div style="padding:6px 8px;font-size:12px;">${escapeHtml(title)}</div>`;
+      const iw = new kakao.maps.InfoWindow({ content: iwContent });
+      iw.open(kakaoMap, kakaoMarker);
+    }
+
+    function ensureKakaoReady() {
+      // autoload=false 인 경우 kakao.maps.load()로 로딩 완료 콜백을 받습니다.
+      return new Promise((resolve, reject) => {
+        if (window.kakao && window.kakao.maps) {
+          try {
+            window.kakao.maps.load(() => resolve());
+          } catch {
+            resolve();
+          }
+          return;
+        }
+
+        const started = Date.now();
+        const timer = setInterval(() => {
+          if (window.kakao && window.kakao.maps) {
+            clearInterval(timer);
+            try {
+              window.kakao.maps.load(() => resolve());
+            } catch {
+              resolve();
+            }
+          } else if (Date.now() - started > 5000) {
+            clearInterval(timer);
+            reject(new Error("Kakao SDK load timeout"));
+          }
+        }, 50);
+      });
+    }
+
+    // -------------------- Utils --------------------
+    function placeholderImage() {
+      const svg = encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700">
+          <rect width="100%" height="100%" fill="#0b1220"/>
+          <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+            fill="#94a3b8" font-size="36" font-family="Arial">
+            이미지 없음
+          </text>
+        </svg>
+      `);
+      return `data:image/svg+xml;charset=utf-8,${svg}`;
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function formatErr(err) {
+      if (typeof err === "string") return err;
+      if (!err) return "알 수 없는 오류";
+
+      const status = err.status ? ` (status: ${err.status})` : "";
+      let msg = err.message || "알 수 없는 오류";
+      msg += status;
+
+      // 디버그용: URL은 serviceKey 마스킹해서 노출
+      if (err.url) {
+        msg += `
+요청 URL: ${maskServiceKey(err.url)}`;
+      }
+      return msg;
+    }
+
+    function extraHelpForAuth(err) {
+      // ✅ 문자열 리터럴에 '그냥 줄바꿈'이 들어가면 SyntaxError(Invalid or unexpected token)가 납니다.
+      // 그래서 템플릿 리터럴(``)로 안전하게 작성합니다.
+      if (err && Number(err.status) === 401) {
+        return `
+
+[해결 체크리스트]
+1) serviceKey가 올바른지 확인 (공공데이터포털 > 마이페이지 > 인증키)
+2) Encoding 키(%로 시작/포함된 키)를 넣었다면 그대로 붙여야 합니다(이중 인코딩 금지)
+3) Decoding 키를 넣었다면 지금 코드가 자동 인코딩합니다
+4) 키 앞뒤 공백/줄바꿈이 들어가면 401이 날 수 있어요
+
+※ 여전히 401이면, 공공데이터포털에서 해당 API의 '활용신청/승인 상태'도 확인해 주세요.`;
+      }
+      return "";
+    }
+
+    function extraHelpForCors(err) {
+      // 브라우저 fetch에서 CORS로 막히면 보통 status 없이 TypeError: Failed to fetch 형태가 납니다.
+      const isFailedFetch = err && err.name === "TypeError" && /fetch/i.test(err.message || "");
+      const isNoStatus = err && (err.status === undefined || err.status === null);
+
+      if (isFailedFetch || isNoStatus) {
+        return `
+
+[데이터를 가져오지 못하는 경우(CORS 가능성)]
+- 공공데이터 OpenAPI가 브라우저 직접 호출을 허용하지 않으면(CORS 차단) 화면에 표시가 안 됩니다.
+- 해결: 프록시를 통해 호출해야 합니다.
+  1) 가장 안정적: 본인 서버/서버리스(Worker 등)에 프록시 1개 만들기
+  2) 임시: PROXY_PREFIX에 프록시 주소를 넣기(예: https://corsproxy.io/?)
+
+※ 아래 '샘플 데이터로 화면 보기' 버튼을 누르면 UI는 바로 확인할 수 있어요.`;
+      }
+      return "";
+    }
+
+    function maskServiceKey(url) {
+      try {
+        const u = new URL(url);
+        const sk = u.searchParams.get("serviceKey");
+        if (!sk) return url;
+        const tail = sk.slice(-4);
+        u.searchParams.set("serviceKey", `****${tail}`);
+        return u.toString();
+      } catch {
+        return url;
+      }
+    }
+
+    async function safeReadText(res) {
+      try {
+        return await res.text();
+      } catch {
+        return "";
+      }
+    }
+
+    // -------------------- Error Actions --------------------
+    let errorActionsBound = false;
+    function bindErrorActionsOnce() {
+      if (errorActionsBound) return;
+      errorActionsBound = true;
+
+      elError.addEventListener("click", (e) => {
+        const t = e.target;
+        if (!(t instanceof HTMLElement)) return;
+
+        if (t.id === "useSampleBtn") {
+          FORCE_SAMPLE_MODE = true;
+          state.pageNo = 1;
+          renderList();
+        }
+
+        if (t.id === "retryBtn") {
+          renderList();
+        }
+      });
+    }
+
+    // -------------------- Sample Data (UI 확인용) --------------------
+    const SAMPLE_ITEMS = [
+      {
+        UC_SEQ: 1,
+        MAIN_TITLE: "만드리곤드레밥",
+        GUGUN_NM: "강서구",
+        ADDR1: "부산 강서구 공항앞길 85번길 13",
+        RPRSNTV_MENU: "돌솥곤드레정식, 단호박오리훈제",
+        ITEMCNTNTS: "생 곤드레나물을 사용한 돌솥밥과 다양한 반찬이 인기입니다.",
+        CNTCT_TEL: "051-941-3669",
+        USAGE_DAY_WEEK_AND_TIME: "11:00-21:00 (20:00 라스트오더)",
+        MAIN_IMG_NORMAL: "",
+        LAT: 35.1765,
+        LNG: 128.9477
+      },
+      {
+        UC_SEQ: 2,
+        MAIN_TITLE: "가야할매밀면",
+        GUGUN_NM: "부산진구",
+        ADDR1: "부산 부산진구 월드컵대로 145번길 32",
+        RPRSNTV_MENU: "물밀면, 비빔밀면",
+        ITEMCNTNTS: "부산 대표 밀면 맛집으로 알려져 있습니다.",
+        CNTCT_TEL: "-",
+        USAGE_DAY_WEEK_AND_TIME: "-",
+        MAIN_IMG_NORMAL: "",
+        LAT: 35.1598,
+        LNG: 129.0564
+      },
+      {
+        UC_SEQ: 3,
+        MAIN_TITLE: "거인통닭",
+        GUGUN_NM: "중구",
+        ADDR1: "부산 중구 중구로47번길 34",
+        RPRSNTV_MENU: "후라이드치킨",
+        ITEMCNTNTS: "전통시장 감성의 통닭 맛집으로 유명합니다.",
+        CNTCT_TEL: "-",
+        USAGE_DAY_WEEK_AND_TIME: "-",
+        MAIN_IMG_NORMAL: "",
+        LAT: 35.1065,
+        LNG: 129.0322
+      }
+    ];
+
+    function sampleResponse(pageNo, numOfRows) {
+      // 페이지 흉내
+      const start = (pageNo - 1) * numOfRows;
+      const slice = SAMPLE_ITEMS.slice(start, start + numOfRows);
+      return {
+        getFoodKr: {
+          totalCount: SAMPLE_ITEMS.length,
+          item: slice
+        }
+      };
+    }
+  </script>
+</body>
+</html>

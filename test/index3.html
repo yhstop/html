@@ -1,0 +1,1227 @@
+<!--
+  부산광역시_부산 맛집 정보 서비스 (모바일 전용)
+  - HTML/CSS/JS ONLY (단일 파일)
+  - Data: https://apis.data.go.kr/6260000/FoodService/getFoodKr
+  - Map: Kakao Maps JS SDK
+
+  사용 방법
+  1) 이 파일을 index.html 로 저장
+  2) 아래 YOUR_* 키 값을 본인 키로 교체
+     - YOUR_DATA_GO_KR_SERVICE_KEY: 공공데이터포털 인증키(serviceKey)
+     - YOUR_KAKAO_JAVASCRIPT_KEY: 카카오 JavaScript 키
+  3) 로컬 실행은 Live Server 등 HTTP 서버로 실행 (file:// 실행 X)
+  4) 카카오 지도 안 뜨면: 카카오 개발자 콘솔에서 플랫폼(Web) 도메인 등록 필수
+-->
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>부산 맛집 정보 (Mobile)</title>
+
+  <!-- Kakao Maps SDK (autoload=false) -->
+  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_KAKAO_JAVASCRIPT_KEY&autoload=false"></script>
+
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#0f172a;
+      --card:#111c33;
+      --card2:#0d1730;
+      --text:#e5e7eb;
+      --muted:#94a3b8;
+      --line: rgba(148,163,184,.18);
+      --chip: rgba(148,163,184,.12);
+      --brand:#38bdf8;
+      --danger:#fb7185;
+      --radius: 16px;
+      --shadow: 0 18px 50px rgba(0,0,0,.35);
+      --safe-top: env(safe-area-inset-top);
+      --safe-bot: env(safe-area-inset-bottom);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background: radial-gradient(1200px 600px at 30% -10%, rgba(56,189,248,.18), transparent 55%),
+                  radial-gradient(900px 500px at 110% 20%, rgba(167,139,250,.16), transparent 60%),
+                  var(--bg);
+      color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", Arial;
+      -webkit-font-smoothing: antialiased;
+      overflow:hidden; /* 모바일 앱 느낌 */
+    }
+
+    /* App Shell */
+    .app{
+      height:100vh;
+      height:100dvh;
+      display:flex;
+      flex-direction:column;
+    }
+
+    .topbar{
+      position:sticky;
+      top:0;
+      z-index:20;
+      padding: calc(10px + var(--safe-top)) 14px 10px;
+      border-bottom:1px solid var(--line);
+      background: rgba(11,18,32,.78);
+      backdrop-filter: blur(14px);
+    }
+
+    .toprow{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+
+    .backBtn{
+      width:40px;height:40px;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-size:18px;
+    }
+
+    .brand{
+      margin:0;
+      font-size:16px;
+      letter-spacing:-.2px;
+      line-height:1;
+    }
+
+    .sub{
+      margin:0;
+      font-size:12px;
+      color:var(--muted);
+      letter-spacing:-.1px;
+    }
+
+    .searchRow{
+      margin-top:10px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+
+    .searchRow input{
+      flex:1;
+      height:42px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      padding:0 14px;
+      outline:none;
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+    }
+
+    .iconBtn{
+      width:42px;height:42px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      cursor:pointer;
+    }
+
+    .filterRow{
+      margin-top:10px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+
+    select{
+      height:40px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      padding:0 12px;
+      outline:none;
+    }
+
+    /* Views */
+    .views{
+      flex:1;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .view{
+      position:absolute;
+      inset:0;
+      display:flex;
+      flex-direction:column;
+      transform: translateX(100%);
+      opacity:0;
+      pointer-events:none;
+      transition: transform .22s ease, opacity .18s ease;
+    }
+
+    .view.is-active{
+      transform: translateX(0);
+      opacity:1;
+      pointer-events:auto;
+    }
+
+    .view.is-exit-left{
+      transform: translateX(-20%);
+      opacity:0;
+    }
+
+    /* List */
+    .scroll{
+      flex:1;
+      overflow:auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px 14px calc(90px + var(--safe-bot));
+    }
+
+    .metaBar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin: 6px 2px 10px;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.05);
+    }
+
+    .list{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .card{
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border-radius: 18px;
+      padding: 12px;
+      box-shadow: 0 10px 22px rgba(0,0,0,.22);
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:10px;
+      cursor:pointer;
+    }
+
+    .card__title{ margin:0 0 6px; font-weight:800; letter-spacing:-.3px; font-size:15px; }
+    .card__sub{ margin:0; color:var(--muted); font-size:12px; line-height:1.35; }
+
+    .chips{ margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
+    .chip{ background: var(--chip); border:1px solid var(--line); padding:4px 8px; border-radius:999px; font-size:11px; color: var(--text); }
+
+    .actions{ display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+    .heart{ border:none; background:transparent; font-size:20px; cursor:pointer; color:var(--text); }
+    .mini{ width:36px; height:36px; border-radius:14px; border:1px solid var(--line); background: rgba(255,255,255,.06); color:var(--text); cursor:pointer; }
+
+    .bottomBar{
+      position:sticky;
+      bottom:0;
+      z-index:15;
+      padding: 10px 14px calc(10px + var(--safe-bot));
+      border-top:1px solid var(--line);
+      background: rgba(11,18,32,.78);
+      backdrop-filter: blur(14px);
+      display:flex;
+      gap:10px;
+      justify-content:space-between;
+      align-items:center;
+    }
+
+    .btn{
+      height:40px;
+      padding:0 12px;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btnPrimary{ border-color: rgba(56,189,248,.35); box-shadow: 0 0 0 3px rgba(56,189,248,.12) inset; }
+
+    .loading, .error{
+      margin-top:12px;
+      color:var(--muted);
+      font-size:12px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      border-radius: 16px;
+      padding:12px;
+    }
+    .error{ color: #fecaca; border-color: rgba(251,113,133,.35); }
+
+    /* Detail */
+    .hero{
+      border-bottom:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+    }
+
+    .heroImg{
+      width:100%;
+      height: 240px;
+      object-fit:cover;
+      display:block;
+      background:#020617;
+    }
+
+    .heroOverlay{
+      position:relative;
+      margin-top:-56px;
+      padding: 0 14px;
+    }
+
+    .detailCard{
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: 12px;
+    }
+
+    .detailTitleRow{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+    }
+
+    .dTitle{ margin:0; font-size:18px; font-weight:900; letter-spacing:-.4px; }
+    .favBtn{
+      width:44px;height:44px;
+      border-radius:16px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      cursor:pointer;
+      font-size:20px;
+    }
+
+    .kv{
+      display:grid;
+      grid-template-columns: 86px 1fr;
+      gap:10px;
+      padding: 10px 0;
+      border-top:1px dashed rgba(148,163,184,.18);
+    }
+    .kv:first-of-type{ border-top:none; padding-top:12px; }
+    .k{ color:var(--muted); font-size:12px; }
+    .v{ color:var(--text); font-size:13px; line-height:1.5; }
+
+    .mapWrap{ margin-top:12px; }
+    .mapTitle{ font-weight:900; font-size:14px; margin: 0 0 8px; }
+    .map{ width:100%; height: 260px; border-radius: 18px; border:1px solid var(--line); overflow:hidden; background: rgba(255,255,255,.04); }
+
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom: calc(70px + var(--safe-bot));
+      transform: translateX(-50%);
+      background: rgba(2,6,23,.82);
+      border:1px solid var(--line);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-size:12px;
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .18s ease;
+      z-index:50;
+    }
+    .toast.show{ opacity:1; }
+
+    /* Desktop에서 모바일처럼 보이게 */
+    @media (min-width: 768px){
+      body{ display:flex; justify-content:center; }
+      .app{
+        max-width: 430px;
+        width: 430px;
+        border-left: 1px solid rgba(148,163,184,.12);
+        border-right: 1px solid rgba(148,163,184,.12);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <!-- Topbar: list / detail 공용. detail에서 back 버튼 표시 -->
+    <header class="topbar">
+      <div class="toprow">
+        <button id="backBtn" class="backBtn" type="button" aria-label="뒤로" style="display:none;">←</button>
+        <div>
+          <h1 class="brand" id="topTitle">부산 맛집</h1>
+          <p class="sub" id="topSub">부산광역시_부산 맛집 정보</p>
+        </div>
+      </div>
+
+      <!-- 리스트 화면에서만 노출 -->
+      <div id="listControls">
+        <div class="searchRow">
+          <input id="searchInput" type="search" placeholder="가게명/메뉴/주소 검색" />
+          <button id="searchBtn" class="iconBtn" type="button" title="검색">🔎</button>
+        </div>
+        <div class="filterRow">
+          <select id="gugunSelect">
+            <option value="">전체 구/군</option>
+          </select>
+          <select id="rowsSelect">
+            <option value="10" selected>10개</option>
+            <option value="20">20개</option>
+            <option value="50">50개</option>
+          </select>
+          <button id="toggleFavOnly" class="btn" type="button" title="찜만 보기">♥</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="views">
+      <!-- LIST VIEW -->
+      <section id="viewList" class="view is-active" aria-label="목록">
+        <div class="scroll">
+          <div class="metaBar">
+            <div class="pill">표시 <b id="countText">0</b>개</div>
+            <div class="pill">페이지 <b id="pageText">1</b></div>
+          </div>
+
+          <div id="list" class="list"></div>
+
+          <div id="listLoading" class="loading" style="display:none;">불러오는 중…</div>
+          <div id="listError" class="error" style="display:none;"></div>
+        </div>
+
+        <div class="bottomBar">
+          <button id="prevBtn" class="btn" type="button">이전</button>
+          <button id="reloadBtn" class="btn" type="button">새로고침</button>
+          <button id="nextBtn" class="btn btnPrimary" type="button">다음</button>
+        </div>
+      </section>
+
+      <!-- DETAIL VIEW -->
+      <section id="viewDetail" class="view" aria-label="상세">
+        <div class="scroll" style="padding:0 0 calc(30px + var(--safe-bot));">
+          <div class="hero">
+            <img id="detailImg" class="heroImg" alt="" />
+          </div>
+
+          <div class="heroOverlay">
+            <div class="detailCard">
+              <div class="detailTitleRow">
+                <h2 class="dTitle" id="dTitle">-</h2>
+                <button id="favBtn" class="favBtn" type="button" title="찜">♡</button>
+              </div>
+
+              <div class="kv">
+                <div class="k">주소</div>
+                <div class="v" id="dAddr">-</div>
+              </div>
+
+              <div class="kv">
+                <div class="k">소개</div>
+                <div class="v" id="dDesc">-</div>
+              </div>
+
+              <div class="kv">
+                <div class="k">대표메뉴</div>
+                <div class="v" id="dMenu">-</div>
+              </div>
+
+              <div class="kv">
+                <div class="k">문의</div>
+                <div class="v" id="dTel">-</div>
+              </div>
+
+              <div class="kv">
+                <div class="k">운영시간</div>
+                <div class="v" id="dTime">-</div>
+              </div>
+
+              <div class="mapWrap">
+                <p class="mapTitle">지도</p>
+                <div id="map" class="map"></div>
+              </div>
+
+              <div style="display:flex; gap:8px; margin-top:12px;">
+                <button id="copyAddrBtn" class="btn" type="button" style="flex:1;">주소 복사</button>
+                <button id="openKakaoMapBtn" class="btn btnPrimary" type="button" style="flex:1;">카카오맵 열기</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast">복사됨</div>
+  </div>
+
+  <script>
+    // -------------------- Config --------------------
+    const API_BASE = "https://apis.data.go.kr/6260000/FoodService/getFoodKr";
+
+    // ✅ (선택) CORS가 막혀 브라우저에서 직접 호출이 실패하면, 프록시를 통해 우회해야 합니다.
+    // - 아래 PROXY_PREFIX를 비워두면("") 직접 호출만 시도합니다.
+    // - 임시 예: "https://corsproxy.io/?" (외부 서비스는 환경에 따라 막힐 수 있음)
+    const PROXY_PREFIX = "";
+
+    // ✅ 개발/디자인 확인용: API 호출이 실패하면 샘플 데이터로 화면을 볼 수 있게 합니다.
+    let FORCE_SAMPLE_MODE = false;
+
+    // ✅ 여기에 공공데이터포털 인증키(serviceKey)를 넣으세요.
+    // - Decoding 키: 코드가 자동 인코딩
+    // - Encoding 키(% 포함): 그대로 전송(이중 인코딩 방지)
+    const SERVICE_KEY = "U3rjn1OQzoe833jk5RJokTl1sVFUmIQp7dGTZl0tcvNU7p2blLzjccSSgrAHQgyLYlBIm7Qt0wOFwQRvvG7h8Q==";
+
+    let state = {
+      pageNo: 1,
+      numOfRows: 10,
+      keyword: "",
+      gugun: "",
+      favOnly: false,
+      items: [],
+      totalCount: 0,
+      selected: null
+    };
+
+    let kakaoMap = null;
+    let kakaoMarker = null;
+
+    const $ = (sel) => document.querySelector(sel);
+
+    // Views
+    const viewList = $("#viewList");
+    const viewDetail = $("#viewDetail");
+    const backBtn = $("#backBtn");
+    const topTitle = $("#topTitle");
+    const topSub = $("#topSub");
+    const listControls = $("#listControls");
+
+    // List elements
+    const elList = $("#list");
+    const elCount = $("#countText");
+    const elPage = $("#pageText");
+    const elLoading = $("#listLoading");
+    const elError = $("#listError");
+
+    const elSearchInput = $("#searchInput");
+    const elSearchBtn = $("#searchBtn");
+    const elGugun = $("#gugunSelect");
+    const elRows = $("#rowsSelect");
+
+    const elPrev = $("#prevBtn");
+    const elNext = $("#nextBtn");
+    const elReload = $("#reloadBtn");
+    const elFavOnly = $("#toggleFavOnly");
+
+    // Detail elements
+    const elFav = $("#favBtn");
+    const elImg = $("#detailImg");
+    const elDTitle = $("#dTitle");
+    const elDAddr = $("#dAddr");
+    const elDDesc = $("#dDesc");
+    const elDMenu = $("#dMenu");
+    const elDTel = $("#dTel");
+    const elDTime = $("#dTime");
+    const elCopyAddr = $("#copyAddrBtn");
+    const elOpenKakao = $("#openKakaoMapBtn");
+
+    const toast = $("#toast");
+
+    // Bootstrap (DOM + Kakao SDK)
+    bootstrap();
+
+    async function bootstrap() {
+      if (document.readyState === "loading") {
+        await new Promise((r) => document.addEventListener("DOMContentLoaded", r, { once: true }));
+      }
+
+      // 뒤로가기를 화면 전환과 연결
+      window.addEventListener("popstate", () => {
+        // state 없이 뒤로가면 목록으로
+        showList(false);
+      });
+
+      try {
+        await ensureKakaoReady();
+      } catch (e) {
+        console.warn("Kakao Maps SDK not ready:", e);
+      }
+
+      init();
+    }
+
+    function init() {
+      elRows.value = String(state.numOfRows);
+
+      elSearchBtn.addEventListener("click", () => {
+        state.keyword = (elSearchInput.value || "").trim();
+        state.pageNo = 1;
+        renderList();
+      });
+
+      elSearchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") elSearchBtn.click();
+      });
+
+      elRows.addEventListener("change", () => {
+        state.numOfRows = Number(elRows.value);
+        state.pageNo = 1;
+        renderList();
+      });
+
+      elGugun.addEventListener("change", () => {
+        state.gugun = elGugun.value;
+        state.pageNo = 1;
+        renderList();
+      });
+
+      elPrev.addEventListener("click", () => {
+        if (state.pageNo > 1) {
+          state.pageNo -= 1;
+          renderList();
+        }
+      });
+
+      elNext.addEventListener("click", () => {
+        const lastPage = state.totalCount ? Math.ceil(state.totalCount / state.numOfRows) : state.pageNo + 1;
+        if (state.pageNo < lastPage) {
+          state.pageNo += 1;
+          renderList();
+        }
+      });
+
+      elReload.addEventListener("click", () => {
+        renderList();
+      });
+
+      elFavOnly.addEventListener("click", () => {
+        state.favOnly = !state.favOnly;
+        elFavOnly.classList.toggle("btnPrimary", state.favOnly);
+        state.pageNo = 1;
+        renderList();
+      });
+
+      backBtn.addEventListener("click", () => {
+        // 모바일 UX: 버튼은 history.back()과 동일하게
+        history.back();
+      });
+
+      elFav.addEventListener("click", async () => {
+        if (!state.selected) return;
+        toggleFavorite(state.selected.UC_SEQ);
+        await renderDetail(state.selected);
+      });
+
+      elCopyAddr.addEventListener("click", async () => {
+        const addr = elDAddr.textContent || "";
+        if (!addr || addr === "-") return toastMsg("주소가 없어요");
+        try {
+          await navigator.clipboard.writeText(addr);
+          toastMsg("주소가 복사됐어요");
+        } catch {
+          toastMsg("복사 실패 (브라우저 권한 확인)");
+        }
+      });
+
+      elOpenKakao.addEventListener("click", () => {
+        if (!state.selected) return;
+        const lat = Number(state.selected.LAT);
+        const lng = Number(state.selected.LNG);
+        const title = state.selected.MAIN_TITLE || "";
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          return toastMsg("좌표 정보가 없어요");
+        }
+        // 카카오맵 웹 링크(모바일에서 앱 연동될 수 있음)
+        const url = `https://map.kakao.com/link/map/${encodeURIComponent(title)},${lat},${lng}`;
+        window.open(url, "_blank", "noopener,noreferrer");
+      });
+
+      // 초기 화면
+      showList(false);
+      renderList();
+    }
+
+    // -------------------- Navigation --------------------
+    function showList(pushHistory = true) {
+      topTitle.textContent = "부산 맛집";
+      topSub.textContent = "부산광역시_부산 맛집 정보";
+      backBtn.style.display = "none";
+      listControls.style.display = "block";
+
+      viewDetail.classList.remove("is-active");
+      viewList.classList.add("is-active");
+
+      // 상세 -> 목록으로 갈 때 지도 리소스 정리(선택)
+      // 카카오맵 객체는 재사용하되, 화면이 바뀌면 relayout만 하면 됨.
+
+      if (pushHistory) {
+        history.pushState({ view: "list" }, "", "#list");
+      }
+    }
+
+    function showDetail(pushHistory = true) {
+      topTitle.textContent = "상세";
+      topSub.textContent = "";
+      backBtn.style.display = "inline-flex";
+      listControls.style.display = "none";
+
+      viewList.classList.add("is-exit-left");
+      viewList.classList.remove("is-active");
+      setTimeout(() => viewList.classList.remove("is-exit-left"), 220);
+
+      viewDetail.classList.add("is-active");
+
+      if (pushHistory) {
+        history.pushState({ view: "detail" }, "", "#detail");
+      }
+    }
+
+    // -------------------- List --------------------
+    async function renderList() {
+      setListStatus({ loading: true, error: "" });
+
+      try {
+        const data = await fetchFoodList(state.pageNo, state.numOfRows);
+        const rawItems = normalizeItems(data);
+        state.totalCount = Number(data?.getFoodKr?.totalCount || data?.totalCount || 0);
+
+        fillGugunOptionsOnce(rawItems);
+
+        const filtered = rawItems.filter((it) => {
+          const matchesGugun = state.gugun ? (it.GUGUN_NM === state.gugun) : true;
+          const matchesKeyword = state.keyword ? textBlob(it).includes(state.keyword.toLowerCase()) : true;
+          const matchesFav = state.favOnly ? isFavorite(it.UC_SEQ) : true;
+          return matchesGugun && matchesKeyword && matchesFav;
+        });
+
+        state.items = filtered;
+        elCount.textContent = String(filtered.length);
+        elPage.textContent = String(state.pageNo);
+
+        elList.innerHTML = filtered.map(cardTemplate).join("");
+
+        // Card click -> detail
+        elList.querySelectorAll("[data-ucseq]").forEach((card) => {
+          card.addEventListener("click", async (e) => {
+            const target = e.target;
+            if (target.closest("button")) return;
+
+            const ucSeq = card.getAttribute("data-ucseq");
+            await openDetail(ucSeq);
+          });
+        });
+
+        // fav button
+        elList.querySelectorAll("[data-fav]").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const ucSeq = btn.getAttribute("data-fav");
+            toggleFavorite(ucSeq);
+            btn.textContent = isFavorite(ucSeq) ? "♥" : "♡";
+            toastMsg(isFavorite(ucSeq) ? "찜 추가" : "찜 해제");
+          });
+        });
+
+        // map button -> open detail
+        elList.querySelectorAll("[data-map]").forEach((btn) => {
+          btn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const ucSeq = btn.getAttribute("data-map");
+            await openDetail(ucSeq);
+          });
+        });
+
+        setListStatus({ loading: false, error: "" });
+      } catch (err) {
+        console.error(err);
+        setListStatus({ loading: false, error: formatErr(err) + extraHelpForAuth(err) + extraHelpForCors(err) });
+      }
+    }
+
+    function setListStatus({ loading, error }) {
+      elLoading.style.display = loading ? "block" : "none";
+      elError.style.display = error ? "block" : "none";
+
+      if (!error) {
+        elError.innerHTML = "";
+        return;
+      }
+
+      elError.innerHTML = `
+        <pre style="margin:0;white-space:pre-wrap;font-family:inherit;">${escapeHtml(error)}</pre>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="useSampleBtn" class="btn" type="button">샘플 데이터로 보기</button>
+          <button id="retryBtn" class="btn btnPrimary" type="button">다시 시도</button>
+        </div>
+      `;
+
+      // 버튼 바인딩(매번 새로 그려지니 여기서 1회 바인딩)
+      const useSampleBtn = $("#useSampleBtn");
+      const retryBtn = $("#retryBtn");
+
+      useSampleBtn?.addEventListener("click", () => {
+        FORCE_SAMPLE_MODE = true;
+        state.pageNo = 1;
+        renderList();
+      });
+
+      retryBtn?.addEventListener("click", () => {
+        renderList();
+      });
+    }
+
+    function cardTemplate(it) {
+      const title = it.MAIN_TITLE || "이름 없음";
+      const addr = it.ADDR1 || "-";
+      const menu = it.RPRSNTV_MENU || it.MENU || "-";
+      const gugun = it.GUGUN_NM || "구/군";
+      const ucSeq = it.UC_SEQ;
+
+      return `
+        <div class="card" data-ucseq="${escapeHtml(String(ucSeq))}">
+          <div>
+            <div class="card__title">${escapeHtml(title)}</div>
+            <p class="card__sub">📍 ${escapeHtml(addr)}</p>
+            <p class="card__sub">🍽️ ${escapeHtml(menu)}</p>
+            <div class="chips">
+              <span class="chip">${escapeHtml(gugun)}</span>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="heart" data-fav="${escapeHtml(String(ucSeq))}" title="찜">${isFavorite(ucSeq) ? "♥" : "♡"}</button>
+            <button class="mini" data-map="${escapeHtml(String(ucSeq))}" title="상세">↗</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // -------------------- Detail --------------------
+    async function openDetail(ucSeq) {
+      try {
+        const data = await fetchFoodDetail(ucSeq);
+        const item = normalizeItems(data)[0] || state.items.find((x) => String(x.UC_SEQ) === String(ucSeq));
+        if (!item) throw new Error("상세 데이터를 찾을 수 없습니다.");
+
+        state.selected = item;
+        await renderDetail(item);
+        showDetail(true);
+
+        // 상세 상단으로
+        viewDetail.querySelector(".scroll")?.scrollTo({ top: 0, behavior: "instant" });
+      } catch (err) {
+        console.error(err);
+        toastMsg("상세 로드 실패");
+      }
+    }
+
+    async function renderDetail(item) {
+      const imgUrl = item.MAIN_IMG_NORMAL || item.MAIN_IMG_THUMB || item.IMG_URL || item.MAIN_IMG || "";
+
+      elImg.src = imgUrl || placeholderImage();
+      elImg.alt = item.MAIN_TITLE || item.TITLE || "맛집 이미지";
+
+      elDTitle.textContent = item.MAIN_TITLE || "-";
+      elDAddr.textContent = item.ADDR1 || item.ADDR || "-";
+      elDDesc.textContent = (item.ITEMCNTNTS || item.SUBTITLE || item.TITLE || "-").trim();
+      elDMenu.textContent = item.RPRSNTV_MENU || item.MENU || "-";
+      elDTel.textContent = item.CNTCT_TEL || item.TEL || "-";
+      elDTime.textContent = item.USAGE_DAY_WEEK_AND_TIME || item.USAGE_TIME || "-";
+
+      elFav.textContent = isFavorite(item.UC_SEQ) ? "♥" : "♡";
+
+      const lat = Number(item.LAT);
+      const lng = Number(item.LNG);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        await renderKakaoMap(lat, lng, item.MAIN_TITLE || "선택한 위치");
+      } else {
+        $("#map").innerHTML = `<div style="padding:12px;color:var(--muted);">좌표 정보(LAT/LNG)가 없어 지도를 표시할 수 없어요.</div>`;
+      }
+    }
+
+    // -------------------- API --------------------
+    async function fetchFoodList(pageNo, numOfRows) {
+      if (FORCE_SAMPLE_MODE) return sampleResponse(pageNo, numOfRows);
+
+      const directUrl = buildUrl({ serviceKey: SERVICE_KEY, pageNo, numOfRows, resultType: "json" });
+      const url = PROXY_PREFIX ? (PROXY_PREFIX + directUrl) : directUrl;
+
+      let res;
+      try {
+        res = await fetch(url);
+      } catch (e) {
+        const err = new Error("네트워크 오류(또는 CORS 차단)로 데이터를 가져올 수 없습니다.");
+        err.name = e?.name || "TypeError";
+        err.status = undefined;
+        err.url = directUrl;
+        throw err;
+      }
+
+      if (!res.ok) {
+        const body = await safeReadText(res);
+        const err = new Error(`HTTP ${res.status}`);
+        err.status = res.status;
+        err.url = directUrl;
+        err.body = body;
+        throw err;
+      }
+
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        const err = new Error("응답 JSON 파싱 실패");
+        err.status = 0;
+        err.url = directUrl;
+        err.body = text;
+        throw err;
+      }
+    }
+
+    async function fetchFoodDetail(ucSeq) {
+      if (FORCE_SAMPLE_MODE) {
+        const found = SAMPLE_ITEMS.find((x) => String(x.UC_SEQ) === String(ucSeq));
+        return { getFoodKr: { item: found ? [found] : [] } };
+      }
+
+      const directUrl = buildUrl({ serviceKey: SERVICE_KEY, pageNo: 1, numOfRows: 1, resultType: "json", UC_SEQ: ucSeq });
+      const url = PROXY_PREFIX ? (PROXY_PREFIX + directUrl) : directUrl;
+
+      let res;
+      try {
+        res = await fetch(url);
+      } catch (e) {
+        const err = new Error("네트워크 오류(또는 CORS 차단)로 데이터를 가져올 수 없습니다.");
+        err.name = e?.name || "TypeError";
+        err.status = undefined;
+        err.url = directUrl;
+        throw err;
+      }
+
+      if (!res.ok) {
+        const body = await safeReadText(res);
+        const err = new Error(`HTTP ${res.status}`);
+        err.status = res.status;
+        err.url = directUrl;
+        err.body = body;
+        throw err;
+      }
+
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        const err = new Error("응답 JSON 파싱 실패");
+        err.status = 0;
+        err.url = directUrl;
+        err.body = text;
+        throw err;
+      }
+    }
+
+    function buildUrl(params) {
+      const { serviceKey, ...rest } = params;
+      const usp = new URLSearchParams();
+      Object.entries(rest).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "") usp.append(k, String(v));
+      });
+      const sk = normalizeServiceKey(serviceKey);
+      const qs = usp.toString();
+      return `${API_BASE}?serviceKey=${sk}${qs ? `&${qs}` : ""}`;
+    }
+
+    function normalizeServiceKey(key) {
+      if (!key) return "";
+      if (/%[0-9A-Fa-f]{2}/.test(key)) return key; // Encoding key
+      return encodeURIComponent(key); // Decoding key
+    }
+
+    function normalizeItems(data) {
+      const root = data?.getFoodKr || data?.response?.body || data;
+      const items = root?.item || root?.items || root?.body?.items || root?.body?.item || [];
+      if (Array.isArray(items)) return items;
+      if (items && typeof items === "object") return [items];
+      return [];
+    }
+
+    function textBlob(it) {
+      return [it.MAIN_TITLE, it.ADDR1, it.RPRSNTV_MENU, it.TITLE, it.SUBTITLE, it.GUGUN_NM]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+    }
+
+    function fillGugunOptionsOnce(items) {
+      if (elGugun.options.length > 1) return;
+      const set = new Set(items.map((x) => x.GUGUN_NM).filter(Boolean));
+      [...set].sort().forEach((g) => {
+        const opt = document.createElement("option");
+        opt.value = g;
+        opt.textContent = g;
+        elGugun.appendChild(opt);
+      });
+    }
+
+    // -------------------- Favorites --------------------
+    const FAV_KEY = "busan_food_favs_v1";
+
+    function getFavSet() {
+      try {
+        const raw = localStorage.getItem(FAV_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set(arr.map(String));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveFavSet(set) {
+      localStorage.setItem(FAV_KEY, JSON.stringify([...set]));
+    }
+
+    function isFavorite(ucSeq) {
+      return getFavSet().has(String(ucSeq));
+    }
+
+    function toggleFavorite(ucSeq) {
+      const set = getFavSet();
+      const key = String(ucSeq);
+      if (set.has(key)) set.delete(key);
+      else set.add(key);
+      saveFavSet(set);
+
+      // 목록 화면일 때 찜만보기 중이면 즉시 갱신
+      if (state.favOnly) renderList();
+    }
+
+    // -------------------- Kakao Map --------------------
+    async function renderKakaoMap(lat, lng, title) {
+      const container = $("#map");
+
+      try {
+        await ensureKakaoReady();
+      } catch {
+        container.innerHTML = `<div style="padding:12px;color:var(--muted);">카카오맵 SDK가 준비되지 않았어요.<br/>- appkey 확인<br/>- 카카오 개발자 콘솔에서 <b>플랫폼(Web) 도메인</b> 등록 확인</div>`;
+        return;
+      }
+
+      await new Promise((r) => requestAnimationFrame(r));
+      const pos = new kakao.maps.LatLng(lat, lng);
+
+      if (!kakaoMap) {
+        kakaoMap = new kakao.maps.Map(container, { center: pos, level: 3 });
+        kakaoMarker = new kakao.maps.Marker({ position: pos });
+        kakaoMarker.setMap(kakaoMap);
+      } else {
+        kakaoMap.relayout();
+        kakaoMap.setCenter(pos);
+        kakaoMarker.setPosition(pos);
+      }
+
+      const iwContent = `<div style="padding:6px 8px;font-size:12px;">${escapeHtml(title)}</div>`;
+      const iw = new kakao.maps.InfoWindow({ content: iwContent });
+      iw.open(kakaoMap, kakaoMarker);
+    }
+
+    function ensureKakaoReady() {
+      return new Promise((resolve, reject) => {
+        if (window.kakao && window.kakao.maps) {
+          try {
+            window.kakao.maps.load(() => resolve());
+          } catch {
+            resolve();
+          }
+          return;
+        }
+
+        const started = Date.now();
+        const timer = setInterval(() => {
+          if (window.kakao && window.kakao.maps) {
+            clearInterval(timer);
+            try {
+              window.kakao.maps.load(() => resolve());
+            } catch {
+              resolve();
+            }
+          } else if (Date.now() - started > 5000) {
+            clearInterval(timer);
+            reject(new Error("Kakao SDK load timeout"));
+          }
+        }, 50);
+      });
+    }
+
+    // -------------------- Utils --------------------
+    function placeholderImage() {
+      const svg = encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700">
+          <rect width="100%" height="100%" fill="#020617"/>
+          <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+            fill="#94a3b8" font-size="36" font-family="Arial">이미지 없음</text>
+        </svg>
+      `);
+      return `data:image/svg+xml;charset=utf-8,${svg}`;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function formatErr(err) {
+      if (typeof err === "string") return err;
+      if (!err) return "알 수 없는 오류";
+
+      const status = err.status ? ` (status: ${err.status})` : "";
+      let msg = err.message || "알 수 없는 오류";
+      msg += status;
+
+      if (err.url) {
+        msg += `
+요청 URL: ${maskServiceKey(err.url)}`;
+      }
+      if (err.body) {
+        msg += `
+
+응답: ${String(err.body).slice(0, 500)}`;
+      }
+      return msg;
+    }
+
+    function extraHelpForAuth(err) {
+      if (err && Number(err.status) === 401) {
+        return `
+
+[해결 체크리스트]
+1) serviceKey 확인 (공공데이터포털 > 마이페이지 > 인증키)
+2) Encoding 키(% 포함)를 넣었다면 그대로 사용(이중 인코딩 금지)
+3) Decoding 키라면 자동 인코딩됩니다
+4) 키 앞뒤 공백/줄바꿈 제거
+
+※ 여전히 401이면, 해당 API '활용신청/승인 상태'도 확인해 주세요.`;
+      }
+      return "";
+    }
+
+    function extraHelpForCors(err) {
+      const isFailedFetch = err && err.name === "TypeError" && /cors|fetch|network/i.test(err.message || "");
+      const isNoStatus = err && (err.status === undefined || err.status === null);
+
+      if (isFailedFetch || isNoStatus) {
+        return `
+
+[데이터를 가져오지 못함 (CORS 가능성)]
+- 브라우저에서 공공데이터 OpenAPI 직접 호출이 차단될 수 있습니다.
+- 해결: 프록시 필요
+  1) 안정적: 본인 서버/서버리스(Worker 등)에 프록시 1개
+  2) 임시: PROXY_PREFIX에 프록시 주소 입력
+
+※ 아래 '샘플 데이터로 보기'로 UI를 먼저 확인할 수 있어요.`;
+      }
+      return "";
+    }
+
+    function maskServiceKey(url) {
+      try {
+        const u = new URL(url);
+        const sk = u.searchParams.get("serviceKey");
+        if (!sk) return url;
+        const tail = sk.slice(-4);
+        u.searchParams.set("serviceKey", `****${tail}`);
+        return u.toString();
+      } catch {
+        return url;
+      }
+    }
+
+    async function safeReadText(res) {
+      try {
+        return await res.text();
+      } catch {
+        return "";
+      }
+    }
+
+    function toastMsg(message) {
+      toast.textContent = message;
+      toast.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => toast.classList.remove("show"), 1200);
+    }
+
+    // -------------------- Sample Data --------------------
+    const SAMPLE_ITEMS = [
+      {
+        UC_SEQ: 1,
+        MAIN_TITLE: "만드리곤드레밥",
+        GUGUN_NM: "강서구",
+        ADDR1: "부산 강서구 공항앞길 85번길 13",
+        RPRSNTV_MENU: "돌솥곤드레정식, 단호박오리훈제",
+        ITEMCNTNTS: "생 곤드레나물을 사용한 돌솥밥과 다양한 반찬이 인기입니다.",
+        CNTCT_TEL: "051-941-3669",
+        USAGE_DAY_WEEK_AND_TIME: "11:00-21:00 (20:00 라스트오더)",
+        MAIN_IMG_NORMAL: "",
+        LAT: 35.1765,
+        LNG: 128.9477
+      },
+      {
+        UC_SEQ: 2,
+        MAIN_TITLE: "가야할매밀면",
+        GUGUN_NM: "부산진구",
+        ADDR1: "부산 부산진구 월드컵대로 145번길 32",
+        RPRSNTV_MENU: "물밀면, 비빔밀면",
+        ITEMCNTNTS: "부산 대표 밀면 맛집으로 알려져 있습니다.",
+        CNTCT_TEL: "-",
+        USAGE_DAY_WEEK_AND_TIME: "-",
+        MAIN_IMG_NORMAL: "",
+        LAT: 35.1598,
+        LNG: 129.0564
+      },
+      {
+        UC_SEQ: 3,
+        MAIN_TITLE: "거인통닭",
+        GUGUN_NM: "중구",
+        ADDR1: "부산 중구 중구로47번길 34",
+        RPRSNTV_MENU: "후라이드치킨",
+        ITEMCNTNTS: "전통시장 감성의 통닭 맛집으로 유명합니다.",
+        CNTCT_TEL: "-",
+        USAGE_DAY_WEEK_AND_TIME: "-",
+        MAIN_IMG_NORMAL: "",
+        LAT: 35.1065,
+        LNG: 129.0322
+      }
+    ];
+
+    function sampleResponse(pageNo, numOfRows) {
+      const start = (pageNo - 1) * numOfRows;
+      const slice = SAMPLE_ITEMS.slice(start, start + numOfRows);
+      return { getFoodKr: { totalCount: SAMPLE_ITEMS.length, item: slice } };
+    }
+  </script>
+</body>
+</html>
