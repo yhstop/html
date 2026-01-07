@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>부산 맛집</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- ✅ autoload=false 로드 후 kakao.maps.load()로 안전하게 초기화 -->
+  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=723a28831bc100497d089cbc3a64e24f&autoload=false&libraries=services"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f6f6f6; font-family: -apple-system, BlinkMacSystemFont; }
+    header { padding: 16px; text-align: center; font-weight: 600; background: #fff; border-bottom: 1px solid #ddd; }
+    .card { background: #fff; padding: 14px; border-bottom: 1px solid #eee; cursor: pointer; }
+    .card h3 { font-size: 16px; margin-bottom: 6px; }
+    .card p { font-size: 13px; color: #666; }
+    .hidden { display: none; }
+    .detail { background: #fff; }
+    .section { padding: 14px; }
+    .thumb { width: 100%; height: 220px; object-fit: cover; margin-bottom: 12px; }
+    .title { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .rating { font-size: 14px; color: #ff9800; margin-left: 6px; }
+    .info p { font-size: 14px; margin-bottom: 6px; }
+    .divider { height: 10px; background: #f6f6f6; }
+    #map { width: 100%; height: 260px; }
+    .review { font-size: 13px; padding: 8px 0; border-bottom: 1px solid #eee; }
+    textarea { width: 100%; height: 80px; padding: 8px; margin-top: 6px; }
+    button { width: 100%; padding: 10px; margin-top: 6px; background: #000; color: #fff; border: none; }
+    .back { cursor:pointer; color:#111; font-weight:600; }
+    .errorBox { padding: 14px; color:#b00020; background:#fff; border-bottom:1px solid #eee; }
+  </style>
+</head>
+
+<body>
+<header id="header">부산 맛집</header>
+
+<main id="listView"></main>
+
+<section id="detailView" class="hidden">
+  <div id="map"></div>
+  <div class="divider"></div>
+
+  <div class="detail">
+    <div class="section">
+      <div class="back" onclick="goBack()">← 뒤로가기</div>
+    </div>
+
+    <div class="section" id="detailContent"></div>
+
+    <div class="divider"></div>
+
+    <div class="section">
+      <h4>리뷰</h4>
+      <div id="reviewList"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section">
+      <h4>리뷰 작성</h4>
+      <textarea id="reviewInput" placeholder="리뷰를 작성해주세요"></textarea>
+      <button onclick="saveReview()">리뷰 등록</button>
+    </div>
+  </div>
+</section>
+
+<script>
+  const SERVICE_KEY = "64dfa8ddd0226789d625e94b0537771b1f1d70d23e68899d4914267475e8398d";
+  const API_URL = "https://apis.data.go.kr/6260000/FoodService/getFoodKr";
+
+  let foodData = [];
+  let currentId = "";
+  let kakaoReady = false;
+
+  // ✅ 카카오 SDK 준비
+  if (window.kakao && kakao.maps) {
+    kakao.maps.load(() => {
+      kakaoReady = true;
+    });
+  } else {
+    // SDK 자체가 막힌 경우(도메인 미등록 등)
+    console.warn("카카오 SDK 로드 실패 가능: 도메인 등록/로컬서버 실행 여부 확인");
+  }
+
+  // ✅ 초기 로딩
+  init();
+
+  async function init() {
+    const list = document.getElementById("listView");
+    list.innerHTML = `<div class="card"><h3>로딩 중...</h3><p>데이터를 불러오는 중입니다.</p></div>`;
+
+    try {
+      const url = `${API_URL}?serviceKey=${encodeURIComponent(SERVICE_KEY)}&pageNo=1&numOfRows=50&resultType=json`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      foodData = (data && data.getFoodKr && Array.isArray(data.getFoodKr.item)) ? data.getFoodKr.item : [];
+      if (foodData.length === 0) {
+        list.innerHTML = `<div class="errorBox">데이터가 비어있습니다. (API 응답 구조가 다르거나 호출이 차단되었을 수 있어요)</div>`;
+        return;
+      }
+
+      renderList();
+    } catch (err) {
+      console.error("API 호출 실패:", err);
+      list.innerHTML = `
+        <div class="errorBox">
+          공공데이터 API 호출이 브라우저에서 차단되었을 가능성이 큽니다(CORS).
+          <br/>해결: 프록시 서버를 붙이거나, 로컬/서버 환경에서 백엔드를 통해 호출해야 합니다.
+        </div>
+      `;
+    }
+  }
+
+  function renderList() {
+    const list = document.getElementById("listView");
+    list.innerHTML = "";
+
+    foodData.forEach(item => {
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <h3>${escapeHtml(item.MAIN_TITLE || "이름 없음")}</h3>
+        <p>${escapeHtml(item.ADDR1 || "주소 정보 없음")}</p>
+        <p>${escapeHtml(item.RPRSNTV_MENU || "대표 메뉴 정보 없음")}</p>
+      `;
+      div.onclick = () => openDetail(item);
+      list.appendChild(div);
+    });
+  }
+
+  function openDetail(item) {
+    currentId = item.UC_SEQ;
+
+    document.getElementById("listView").classList.add("hidden");
+    document.getElementById("detailView").classList.remove("hidden");
+    document.getElementById("header").innerText = item.MAIN_TITLE || "상세";
+
+    const rating = (Math.random() * 1.5 + 3).toFixed(1);
+
+    document.getElementById("detailContent").innerHTML = `
+      ${item.MAIN_IMG_NORMAL ? `<img class="thumb" src="${item.MAIN_IMG_NORMAL}" alt="">` : ""}
+      <div class="title">
+        ${escapeHtml(item.MAIN_TITLE || "")}
+        <span class="rating">⭐ ${rating}</span>
+      </div>
+      <div class="info">
+        <p>📍 ${escapeHtml(item.ADDR1 || "정보 없음")}</p>
+        <p>📞 ${escapeHtml(item.CNTCT_TEL || "정보 없음")}</p>
+        <p>⏰ ${escapeHtml(item.USAGE_DAY_WEEK_AND_TIME || "정보 없음")}</p>
+      </div>
+    `;
+
+    loadReviews();
+
+    // ✅ 지도 그리기: 화면 전환 후 relayout 필요
+    setTimeout(() => {
+      drawMap(item.LAT, item.LNG);
+    }, 0);
+  }
+
+  function drawMap(lat, lng) {
+    const mapContainer = document.getElementById("map");
+    mapContainer.innerHTML = "";
+
+    const _lat = Number(lat);
+    const _lng = Number(lng);
+
+    if (!Number.isFinite(_lat) || !Number.isFinite(_lng) || _lat === 0 || _lng === 0) {
+      mapContainer.innerHTML = "위치 정보 없음";
+      return;
+    }
+
+    if (!kakaoReady || !window.kakao || !kakao.maps) {
+      mapContainer.innerHTML = "카카오 지도 SDK 준비 안 됨 (도메인 등록/로컬서버 실행 여부 확인)";
+      return;
+    }
+
+    const map = new kakao.maps.Map(mapContainer, {
+      center: new kakao.maps.LatLng(_lat, _lng),
+      level: 3
+    });
+
+    // relayout 후 center 재설정
+    setTimeout(() => {
+      map.relayout();
+      map.setCenter(new kakao.maps.LatLng(_lat, _lng));
+    }, 0);
+
+    new kakao.maps.Marker({
+      map,
+      position: new kakao.maps.LatLng(_lat, _lng)
+    });
+  }
+
+  function goBack() {
+    document.getElementById("detailView").classList.add("hidden");
+    document.getElementById("listView").classList.remove("hidden");
+    document.getElementById("header").innerText = "부산 맛집";
+  }
+
+  function loadReviews() {
+    const list = document.getElementById("reviewList");
+    const reviews = JSON.parse(localStorage.getItem("reviews_" + currentId)) || [];
+    list.innerHTML = reviews.map(r => `<div class="review">${escapeHtml(r)}</div>`).join("");
+  }
+
+  function saveReview() {
+    const input = document.getElementById("reviewInput");
+    if (!input.value.trim()) return;
+
+    const key = "reviews_" + currentId;
+    const reviews = JSON.parse(localStorage.getItem(key)) || [];
+    reviews.push(input.value);
+    localStorage.setItem(key, JSON.stringify(reviews));
+
+    input.value = "";
+    loadReviews();
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+</script>
+</body>
+</html>

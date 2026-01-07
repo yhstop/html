@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>부산 공영주차장 조회</title>
+
+  <!-- Kakao Maps SDK는 JS에서 동적으로 로드합니다 -->
+
+  <style>
+    :root{
+      --bg:#f6f7fb;
+      --card:#ffffff;
+      --text:#111827;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --primary:#2563eb;
+      --primary-weak:#dbeafe;
+      --danger:#ef4444;
+      --shadow: 0 10px 24px rgba(0,0,0,.08);
+      --radius: 14px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Arial; background:var(--bg); color:var(--text)}
+    a{color:inherit}
+
+    header{
+      position: sticky; top: 0; z-index: 5;
+      background: rgba(246,247,251,.9);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+    }
+    .wrap{max-width:1200px;margin:0 auto;padding:16px}
+    .title{
+      display:flex;align-items:center;gap:10px;
+      font-size:18px;font-weight:800;
+    }
+    .badge{
+      font-size:12px;font-weight:700;
+      background:var(--primary-weak);
+      color:var(--primary);
+      padding:4px 8px;border-radius:999px;
+    }
+
+    .grid{
+      max-width:1200px;margin:0 auto;
+      padding:16px;
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap:16px;
+      align-items:start;
+    }
+
+    @media (max-width: 980px){
+      .grid{grid-template-columns: 1fr}
+      #map{height: 52vh !important}
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card-h{
+      padding:14px 14px 10px;
+      border-bottom:1px solid var(--line);
+      display:flex;justify-content:space-between;align-items:flex-start;gap:10px;
+    }
+    .card-h h2{font-size:15px;font-weight:800}
+    .card-h p{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.35}
+
+    .controls{padding:14px; display:grid; gap:10px}
+
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    @media (max-width: 520px){
+      .row,.row3{grid-template-columns:1fr}
+    }
+
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    input, select{
+      width:100%;
+      padding:10px 10px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      outline:none;
+      background:#fff;
+      font-size:14px;
+    }
+    input:focus, select:focus{border-color:rgba(37,99,235,.55); box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+
+    .btns{display:flex;gap:10px;flex-wrap:wrap}
+    button{
+      border:none;cursor:pointer;
+      border-radius:12px;
+      padding:10px 12px;
+      font-weight:800;
+      font-size:14px;
+    }
+    .btn-primary{background:var(--primary); color:#fff}
+    .btn-ghost{background:#fff; border:1px solid var(--line); color:var(--text)}
+    .btn-danger{background:var(--danger); color:#fff}
+
+    .status{
+      padding:0 14px 12px;
+      font-size:12px; color:var(--muted);
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    }
+    .pill{
+      font-size:12px;
+      padding:4px 8px;
+      border-radius:999px;
+      background:#f3f4f6;
+      border:1px solid var(--line);
+      color:#374151;
+    }
+
+    .list{
+      max-height: calc(100vh - 280px);
+      overflow:auto;
+    }
+    @media (max-width: 980px){
+      .list{max-height: 40vh}
+    }
+
+    .item{
+      padding:14px;
+      border-top:1px solid var(--line);
+      display:grid;
+      gap:6px;
+      cursor:pointer;
+      transition:.12s ease;
+    }
+    .item:hover{background:#fafafa}
+    .item .name{font-weight:900; font-size:14px}
+    .item .meta{display:flex; flex-wrap:wrap; gap:6px}
+    .kv{font-size:12px;color:var(--muted);line-height:1.35}
+
+    .empty{padding:18px;color:var(--muted);font-size:13px}
+
+    #map{
+      height: calc(100vh - 120px);
+      min-height: 520px;
+      width:100%;
+      border-radius: var(--radius);
+    }
+
+    .toast{
+      position:fixed; left:50%; bottom:16px; transform:translateX(-50%);
+      background: rgba(17,24,39,.92);
+      color:#fff; padding:10px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.24);
+      display:none;
+      z-index: 20;
+      max-width: calc(100% - 24px);
+      text-align:center;
+    }
+
+    .footnote{padding:12px 14px; border-top:1px solid var(--line); font-size:12px; color:var(--muted); line-height:1.5}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="wrap">
+      <div class="title">
+        부산 공영주차장 조회
+        <span class="badge">공공데이터 + 카카오맵</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- Left: 검색/목록 -->
+    <section class="card" aria-label="검색 및 목록">
+      <div class="card-h">
+        <div>
+          <h2>검색</h2>
+          <p>
+            부산 공영주차장 데이터를 불러와 목록/지도에 표시합니다.<br/>
+            <span class="mono">serviceKey</span>와 카카오 <span class="mono">appkey</span>를 본인 키로 교체하세요.
+          </p>
+        </div>
+      </div>
+
+      <div class="controls">
+        
+        
+
+        <div class="row">
+          <div>
+            <label for="q">키워드(주차장명/주소)</label>
+            <input id="q" type="text" placeholder="예: 해운대, 센텀" />
+          </div>
+          <div>
+            <label for="gu">구/군</label>
+            <select id="gu">
+              <option value="">전체</option>
+              <option>중구</option><option>서구</option><option>동구</option><option>영도구</option>
+              <option>부산진구</option><option>동래구</option><option>남구</option><option>북구</option>
+              <option>해운대구</option><option>사하구</option><option>금정구</option><option>강서구</option>
+              <option>연제구</option><option>수영구</option><option>사상구</option><option>기장군</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row3">
+          <div>
+            <label for="numOfRows">표시 개수</label>
+            <select id="numOfRows">
+              <option value="10">10</option>
+              <option value="20" selected>20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <div>
+            <label for="pageNo">페이지</label>
+            <input id="pageNo" type="number" min="1" value="1" />
+          </div>
+          <div>
+            <label for="sort">정렬</label>
+            <select id="sort">
+              <option value="name">이름</option>
+              <option value="capacity">면수(내림)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="btns">
+          <button id="btnSearch" class="btn-primary">조회</button>
+          <button id="btnMy" class="btn-ghost">내 위치 기준</button>
+          <button id="btnReset" class="btn-ghost">초기화</button>
+        </div>
+      </div>
+
+      <div class="status" id="status">
+        <span class="pill" id="pillCount">0건</span>
+        <span class="pill" id="pillCenter">센터: -</span>
+      </div>
+
+      <div class="list" id="list">
+        <div class="empty">검색 조건을 입력하고 <b>조회</b>를 눌러주세요.</div>
+      </div>
+
+      <div class="footnote">
+        <div>※ API 응답의 실제 필드명은 버전에 따라 다를 수 있습니다. 화면에 안 뜨면 <span class="mono">normalizeItem()</span>의 매핑을 조정하세요.</div>
+        <div>※ 브라우저에서 <span class="mono">Mixed Content</span> 오류가 나면, 페이지도 HTTPS로 열어야 합니다.</div>
+      </div>
+    </section>
+
+    <!-- Right: 지도 -->
+    <section class="card" aria-label="지도">
+      <div id="map"></div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module">
+    /**
+     * 부산 공영주차장 조회 서비스 (순수 HTML/CSS/JS)
+     * - 공공데이터포털: https://apis.data.go.kr/6260000/BusanPblcPrkngInfoService
+     * - 카카오맵: Kakao Maps JS SDK
+     *
+     * ✅ 준비물
+     * 1) 공공데이터 ServiceKey (Decoding)
+     * 2) 카카오맵 JavaScript 키 (head의 YOUR_KAKAO_JAVASCRIPT_KEY 교체)
+     */
+
+    // -----------------------------
+    // 0) API KEY 설정 (한 번만 입력)
+    // -----------------------------
+    const CONFIG = {
+      // ✅ 카카오 JavaScript 키
+      KAKAO_JS_KEY: '3ca8f8ca6e23307fccc79051a54d9f4a',
+
+      // ✅ 공공데이터 ServiceKey
+      // - data.go.kr에서 제공하는 "Decoding"(원문 키) 또는 "Encoding"(퍼센트 인코딩된 키) 둘 다 지원
+      PUBLIC_DATA_KEY: 'U3rjn1OQzoe833jk5RJokTl1sVFUmIQp7dGTZl0tcvNU7p2blLzjccSSgrAHQgyLYlBIm7Qt0wOFwQRvvG7h8Q%3D%3D',
+      // 'auto' | 'decoding' | 'encoding'
+      PUBLIC_DATA_KEY_FORMAT: 'auto',
+
+      // ✅ API 엔드포인트 (문서 기준)
+      // 요청주소: http://apis.data.go.kr/6260000/BusanPblcPrkngInfoService/getPblcPrkngInfo
+      API_HTTPS: 'https://apis.data.go.kr/6260000/BusanPblcPrkngInfoService/getPblcPrkngInfo',
+      API_HTTP:  'http://apis.data.go.kr/6260000/BusanPblcPrkngInfoService/getPblcPrkngInfo',
+
+      // ✅ (선택) CORS 우회용 프록시
+      // - data.go.kr API는 브라우저에서 CORS 차단되는 경우가 많습니다.
+      // - 아래 PROXY_URL에 본인이 만든 프록시 주소를 넣으면, 모든 요청이 프록시를 통해 나가도록 동작합니다.
+      // 예) Cloudflare Worker / Vercel Serverless / Node(Express) 등
+      PROXY_URL: ''
+    };
+
+    // -----------------------------
+    // 1) 전역 상태
+    // -----------------------------
+    const state = {
+      items: [],
+      markers: [],
+      infoWindow: null,
+      map: null,
+      center: { lat: 35.1795543, lng: 129.0756416 }, // 부산시청 근처
+      myPos: null,
+    };
+
+    // -----------------------------
+    // 1) 유틸
+    // -----------------------------
+    const $ = (id) => document.getElementById(id);
+
+    function toast(msg){
+      const el = $('toast');
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => (el.style.display = 'none'), 2400);
+    }
+
+    function errorToMessage(err){
+      if(!err) return '알 수 없는 오류';
+      if(typeof err === 'string') return err;
+      if(err instanceof Error) return err.message || String(err);
+
+      // script.onerror 등에서 넘어오는 Event 객체가 [object Event]로 보이는 문제 해결
+      const isEventLike = (typeof err === 'object') && ('type' in err) && ('target' in err || 'currentTarget' in err);
+      if(isEventLike){
+        const target = err.target || err.currentTarget;
+        const src = target?.src || target?.href || '';
+        return `리소스 로드 실패(Event: ${err.type})${src ? ` - ${src}` : ''}`;
+      }
+
+      try{ return JSON.stringify(err); }catch{ return String(err); }
+    }
+
+    function safeNumber(v){
+      const n = Number(String(v ?? '').replace(/[^0-9.\-]/g,''));
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function pickFirst(obj, keys){
+      for(const k of keys){
+        if(obj && obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') return obj[k];
+      }
+      return '';
+    }
+
+    function asText(v){
+      return (v === undefined || v === null) ? '' : String(v).trim();
+    }
+
+    // -----------------------------
+    // 2) API 호출
+    // -----------------------------
+    function isProbablyEncodedKey(k){
+      // encoded 키는 보통 %2F, %3D 같은 퍼센트 인코딩 패턴이 포함됨
+      return /%[0-9A-Fa-f]{2}/.test(k);
+    }
+
+    function buildApiUrl({ serviceKey, numOfRows, pageNo, useHttp }){
+      const base = useHttp ? CONFIG.API_HTTP : CONFIG.API_HTTPS;
+
+      // ServiceKey는 "Encoding" 값을 넣으면 절대 재인코딩하면 안 됨.
+      // URLSearchParams는 %를 %25로 바꿔버릴 수 있어서, serviceKey만 따로 안전하게 붙임.
+      const fmt = (CONFIG.PUBLIC_DATA_KEY_FORMAT || 'auto');
+      const treatAsEncoded = (fmt === 'encoding') || (fmt === 'auto' && isProbablyEncodedKey(serviceKey));
+
+      const qs = new URLSearchParams();
+      qs.set('pageNo', String(pageNo));
+      qs.set('numOfRows', String(numOfRows));
+      qs.set('resultType', 'json');
+
+      const keyPart = treatAsEncoded
+        ? `serviceKey=${serviceKey}`
+        : `serviceKey=${encodeURIComponent(serviceKey)}`;
+
+      const directUrl = `${base}?${keyPart}&${qs.toString()}`;
+
+      // ✅ 프록시가 설정되어 있으면 프록시로 우회
+      // 프록시 규격: PROXY_URL?url=<원본URL>
+      if(CONFIG.PROXY_URL && CONFIG.PROXY_URL.trim()){
+        const proxy = CONFIG.PROXY_URL.trim().replace(/\/$/, '');
+        return `${proxy}?url=${encodeURIComponent(directUrl)}`;
+      }
+
+      return directUrl;
+    }
+
+    async function fetchJson(url){
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 12000);
+
+      try{
+        const res = await fetch(url, {
+          method: 'GET',
+          mode: 'cors',
+          cache: 'no-store',
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json, text/plain, */*'
+          }
+        });
+
+        if(!res.ok){
+          const text = await res.text().catch(()=> '');
+          throw new Error(`HTTP ${res.status} ${res.statusText} - ${text.slice(0,180)}`);
+        }
+
+        const data = await res.json().catch(async () => {
+          const t2 = await res.text();
+          throw new Error('JSON 파싱 실패. 응답: ' + t2.slice(0,200));
+        });
+
+        return data;
+      } finally {
+        clearTimeout(t);
+      }
+    }
+
+    async function fetchParking({ serviceKey, numOfRows, pageNo }){
+      // 1) 우선 HTTPS로 시도
+      const httpsUrl = buildApiUrl({ serviceKey, numOfRows, pageNo, useHttp: false });
+
+      try{
+        const data = await fetchJson(httpsUrl);
+        return { url: httpsUrl, items: extractItemsFromResponse(data) };
+      }catch(err){
+        // 2) 개발환경이 http:// 로 떠 있을 때만 http 엔드포인트 재시도 (https 페이지에서는 mixed content 위험)
+        const canTryHttp = (location.protocol === 'http:');
+        if(!canTryHttp) throw Object.assign(err, { _urlTried: httpsUrl });
+
+        const httpUrl = buildApiUrl({ serviceKey, numOfRows, pageNo, useHttp: true });
+        const data2 = await fetchJson(httpUrl);
+        return { url: httpUrl, items: extractItemsFromResponse(data2) };
+      }
+    }
+
+    function extractItemsFromResponse(data){
+      // 흔한 케이스들을 최대한 커버: data.response.body.items.item
+      const a = data?.response?.body?.items?.item;
+      if(Array.isArray(a)) return a;
+      if(a && typeof a === 'object') return [a];
+
+      // 다른 구조 (예: get... -> body -> item)
+      const b = data?.body?.items?.item;
+      if(Array.isArray(b)) return b;
+      if(b && typeof b === 'object') return [b];
+
+      // 혹시 최상위 items
+      const c = data?.items;
+      if(Array.isArray(c)) return c;
+
+      return [];
+    }
+
+    // -----------------------------
+    // 3) 필드 정규화 (★ 여기 중요)
+    // -----------------------------
+    function normalizeItem(raw){
+      // ✅ data.go.kr 문서(부산 공영주차장 정보 조회) 기준 필드명 우선 지원
+      // pkNam(주차장명), doroAddr/jibunAddr(주소), tponNum(전화), pkCnt(주차구획수)
+      // xCdnt(위도), yCdnt(경도)
+
+      const name = asText(pickFirst(raw, ['pkNam','prkngNm','pblcPrkngNm','parkingName','name']));
+      const addr = asText(pickFirst(raw, ['doroAddr','jibunAddr','rdnmadr','addr','address','location']));
+      const tel  = asText(pickFirst(raw, ['tponNum','telno','tel','phoneNumber']));
+      const capacity = safeNumber(pickFirst(raw, ['pkCnt','prkcmprt','parkingCmprt','capacity','totPkngCnt','prkngCnt']));
+
+      // 요금 관련
+      const feeInfo = asText(pickFirst(raw, ['feeInfo']));
+      const tenMin = asText(pickFirst(raw, ['tenMin']));
+      const feeAdd = asText(pickFirst(raw, ['feeAdd']));
+      const ftDay = asText(pickFirst(raw, ['ftDay']));
+      const ftMon = asText(pickFirst(raw, ['ftMon']));
+      const fee = feeInfo || [tenMin && `기본(${tenMin})`, feeAdd && `추가(${feeAdd})`, ftDay && `1일권(${ftDay})`, ftMon && `월정기(${ftMon})`].filter(Boolean).join(' / ');
+
+      // 운영시간(평일 위주)
+      const open = asText(pickFirst(raw, ['svcSrtTe','operOpenHm','openTime']));
+      const close = asText(pickFirst(raw, ['svcEndTe','operCloseHm','closeTime']));
+
+      // 좌표
+      const lat = safeNumber(pickFirst(raw, ['xCdnt','latitude','lat','y','Y']));
+      const lng = safeNumber(pickFirst(raw, ['yCdnt','longitude','lng','x','X']));
+
+      return {
+        _raw: raw,
+        name,
+        addr,
+        tel,
+        capacity,
+        fee,
+        hours: (open || close) ? `${open || '-'} ~ ${close || '-'}` : '',
+        lat,
+        lng,
+      };
+    }
+
+    // -----------------------------
+    // 4) 필터/정렬
+    // -----------------------------
+    function applyFilters(items){
+      const q = $('q').value.trim();
+      const gu = $('gu').value.trim();
+
+      const qLower = q.toLowerCase();
+
+      return items.filter(it => {
+        const name = (it.name || '').toLowerCase();
+        const addr = (it.addr || '').toLowerCase();
+        const hitQ = !qLower || name.includes(qLower) || addr.includes(qLower);
+        const hitGu = !gu || (it.addr || '').includes(gu);
+        return hitQ && hitGu;
+      });
+    }
+
+    function applySort(items){
+      const sort = $('sort').value;
+      const copy = [...items];
+      if(sort === 'capacity'){
+        copy.sort((a,b) => (b.capacity ?? -1) - (a.capacity ?? -1));
+      }else{
+        copy.sort((a,b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+      }
+      return copy;
+    }
+
+    // -----------------------------
+    // 5) 지도
+    // -----------------------------
+    function initMap(){
+      const container = $('map');
+      const options = {
+        center: new kakao.maps.LatLng(state.center.lat, state.center.lng),
+        level: 6,
+      };
+      state.map = new kakao.maps.Map(container, options);
+      state.infoWindow = new kakao.maps.InfoWindow({ removable: true });
+
+      // 기본 컨트롤
+      const zoomControl = new kakao.maps.ZoomControl();
+      state.map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
+
+      // ✅ 지도 이동/줌 변경 등으로 idle 될 때 센터 표시 업데이트
+      kakao.maps.event.addListener(state.map, 'idle', updateCenterPill);
+      updateCenterPill();
+    }
+
+    function clearMarkers(){
+      for(const m of state.markers){
+        m.setMap(null);
+      }
+      state.markers = [];
+    }
+
+    function fitMapToMarkers(markers){
+      if(!markers.length) return;
+      const bounds = new kakao.maps.LatLngBounds();
+      markers.forEach(m => bounds.extend(m.getPosition()));
+      state.map.setBounds(bounds);
+      updateCenterPill();
+    }
+
+    function addMarkers(items){
+      clearMarkers();
+
+      const markers = [];
+      items.forEach((it, idx) => {
+        if(it.lat == null || it.lng == null) return;
+
+        const pos = new kakao.maps.LatLng(it.lat, it.lng);
+        const marker = new kakao.maps.Marker({ position: pos });
+        marker.setMap(state.map);
+
+        kakao.maps.event.addListener(marker, 'click', () => {
+          openInfo(it, marker);
+          highlightListItem(idx);
+        });
+
+        markers.push(marker);
+      });
+
+      state.markers = markers;
+      fitMapToMarkers(markers);
+    }
+
+    function openInfo(it, marker){
+      const html = `
+        <div style="padding:10px; max-width:260px;">
+          <div style="font-weight:900; font-size:14px; margin-bottom:6px;">${escapeHtml(it.name || '주차장')}</div>
+          ${it.addr ? `<div style="font-size:12px; color:#374151; margin-bottom:4px;">${escapeHtml(it.addr)}</div>` : ''}
+          <div style="font-size:12px; color:#6b7280; line-height:1.4;">
+            ${it.capacity != null ? `면수: ${it.capacity}<br/>` : ''}
+            ${it.fee ? `요금: ${escapeHtml(it.fee)}<br/>` : ''}
+            ${it.hours ? `운영: ${escapeHtml(it.hours)}<br/>` : ''}
+            ${it.tel ? `전화: ${escapeHtml(it.tel)}` : ''}
+          </div>
+        </div>
+      `;
+      state.infoWindow.setContent(html);
+      state.infoWindow.open(state.map, marker);
+
+      // 센터를 약간 이동
+      const p = marker.getPosition();
+      state.map.panTo(p);
+      updateCenterPill();
+    }
+
+    function updateCenterPill(){
+      const c = state.map?.getCenter();
+      if(!c) return;
+      $('pillCenter').textContent = `센터: ${c.getLat().toFixed(5)}, ${c.getLng().toFixed(5)}`;
+    }
+
+    // -----------------------------
+    // 6) UI 렌더링
+    // -----------------------------
+    function renderList(items){
+      const list = $('list');
+      if(!items.length){
+        list.innerHTML = `<div class="empty">조건에 맞는 결과가 없습니다. (좌표가 없는 데이터는 지도에 표시되지 않을 수 있어요)</div>`;
+        return;
+      }
+
+      list.innerHTML = items.map((it, idx) => {
+        const cap = (it.capacity != null) ? `${it.capacity}면` : '-';
+        const hasCoord = (it.lat != null && it.lng != null);
+
+        return `
+          <div class="item" data-idx="${idx}">
+            <div class="name">${escapeHtml(it.name || '주차장')}</div>
+            <div class="kv">${escapeHtml(it.addr || '주소 정보 없음')}</div>
+            <div class="meta">
+              <span class="pill">면수: ${escapeHtml(cap)}</span>
+              ${it.fee ? `<span class="pill">요금: ${escapeHtml(it.fee)}</span>` : ''}
+              ${it.hours ? `<span class="pill">운영: ${escapeHtml(it.hours)}</span>` : ''}
+              <span class="pill">지도: ${hasCoord ? 'O' : 'X'}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // click bind
+      list.querySelectorAll('.item').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = Number(el.dataset.idx);
+          const it = items[idx];
+          focusItemOnMap(it, idx);
+        });
+      });
+    }
+
+    function highlightListItem(idx){
+      const list = $('list');
+      const els = list.querySelectorAll('.item');
+      els.forEach(e => e.style.outline = 'none');
+      const el = list.querySelector(`.item[data-idx="${idx}"]`);
+      if(el){
+        el.style.outline = '3px solid rgba(37,99,235,.22)';
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    function focusItemOnMap(it, idx){
+      if(it.lat == null || it.lng == null){
+        toast('이 항목은 좌표 정보가 없어 지도에 표시할 수 없어요.');
+        return;
+      }
+      const pos = new kakao.maps.LatLng(it.lat, it.lng);
+      state.map.panTo(pos);
+      updateCenterPill();
+
+      // 해당 인덱스에 대응되는 마커를 찾아 오픈
+      // (좌표 없는 아이템 때문에 marker index가 다를 수 있으므로, 근접 매칭)
+      let nearest = null;
+      let best = Infinity;
+      state.markers.forEach(m => {
+        const p = m.getPosition();
+        const d = Math.abs(p.getLat() - it.lat) + Math.abs(p.getLng() - it.lng);
+        if(d < best){ best = d; nearest = m; }
+      });
+
+      if(nearest){
+        openInfo(it, nearest);
+        highlightListItem(idx);
+      }
+    }
+
+    function updateCountPill(n){
+      $('pillCount').textContent = `${n}건`;
+    }
+
+    function escapeHtml(str){
+      return String(str)
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'",'&#39;');
+    }
+
+    // -----------------------------
+    // 7) 내 위치
+    // -----------------------------
+    function getMyLocation(){
+      return new Promise((resolve, reject) => {
+        if(!navigator.geolocation) return reject(new Error('이 브라우저는 위치 기능을 지원하지 않습니다.'));
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            resolve({
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            });
+          },
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        );
+      });
+    }
+
+    function distanceApproxKm(a, b){
+      // 간단 근사 (Haversine 대신 가벼운 버전)
+      const toRad = (x) => x * Math.PI / 180;
+      const R = 6371;
+      const dLat = toRad(b.lat - a.lat);
+      const dLng = toRad(b.lng - a.lng);
+      const s1 = Math.sin(dLat/2);
+      const s2 = Math.sin(dLng/2);
+      const q = s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(q)));
+    }
+
+    // -----------------------------
+    // 8) 동작: 조회/초기화
+    // -----------------------------
+    async function loadKakaoIfNeeded(){
+      if(window.kakao && kakao.maps) return;
+
+      const key = CONFIG.KAKAO_JS_KEY;
+      if(!key || key.includes('여기에')){
+        alert('CONFIG.KAKAO_JS_KEY를 설정하세요');
+        throw new Error('NO_KAKAO_KEY');
+      }
+
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        const src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&libraries=services`;
+        script.src = src;
+        script.onload = () => resolve();
+        script.onerror = (e) => {
+          // onerror는 Event 객체가 넘어와서 그대로 reject하면 [object Event]가 뜸
+          reject(new Error('카카오맵 SDK 로드 실패. 카카오 키/도메인 등록/네트워크를 확인하세요. (' + src + ')'));
+        };
+        document.head.appendChild(script);
+      });
+
+      initMap();
+    }
+
+    async function onSearch(){
+      $('btnSearch').disabled = true;
+      $('btnSearch').textContent = '준비 중...';
+
+      try{
+        // 1) 카카오맵 SDK/지도 준비 (여기서 실패해도 catch로 잡히게)
+        await loadKakaoIfNeeded();
+
+        const serviceKey = CONFIG.PUBLIC_DATA_KEY;
+        if(!serviceKey || serviceKey.includes('여기에')){
+          alert('CONFIG.PUBLIC_DATA_KEY를 설정하세요');
+          return;
+        }
+
+        const numOfRows = Number($('numOfRows').value);
+        const pageNo = Math.max(1, Number($('pageNo').value || 1));
+
+        $('btnSearch').textContent = '불러오는 중...';
+
+        const result = await fetchParking({ serviceKey, numOfRows, pageNo });
+        // 진단용: 실제 요청 URL 표시
+        state._lastRequestUrl = result.url;
+        toast('요청 URL을 생성했습니다.');
+
+        const rawItems = result.items;
+        const normalized = rawItems.map(normalizeItem);
+
+        // 필터/정렬
+        let items = applyFilters(normalized);
+        items = applySort(items);
+
+        state.items = items;
+        updateCountPill(items.length);
+        renderList(items);
+        addMarkers(items);
+
+        if(items.length){
+          toast(`총 ${items.length}건 불러왔습니다.`);
+        }else{
+          toast('API 응답은 받았지만 items가 비어있어요. (응답 구조/필드명 확인 필요)');
+        }
+      }catch(err){
+        console.error(err);
+        const msg = errorToMessage(err);
+        state._lastError = msg;
+        toast('조회 실패: ' + msg);
+
+        if(location.protocol === 'file:'){
+          toast('file:// 실행은 차단될 수 있어요. Live Server로 실행하세요.');
+        }
+        if(String(err).includes('Failed to fetch') || err?.name === 'TypeError'){
+          toast('Failed to fetch: CORS/네트워크 차단 가능. 키 형식(encoding/decoding)도 확인하세요.');
+        }
+        if(err?._urlTried){
+          toast('마지막 시도 URL: ' + err._urlTried);
+        }
+
+        $('list').innerHTML = `
+          <div class="empty">
+            <b style="color:#111827">API에서 데이터를 가져오지 못했어요.</b><br/>
+            <span style="color:#6b7280">${escapeHtml(msg)}</span>
+            ${state._lastRequestUrl ? `<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+              <a href="${state._lastRequestUrl}" target="_blank" rel="noopener" style="display:inline-block; padding:8px 10px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; font-weight:800; font-size:12px; text-decoration:none;">요청 URL 열기</a>
+              <button id="btnCopyUrl" style="padding:8px 10px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; font-weight:800; font-size:12px;">요청 URL 복사</button>
+            </div>` : ''}
+            <div style="margin-top:10px; color:#6b7280; line-height:1.55;">
+              <b>onSearch @ line</b> 형태의 로그는, <u>에러가 onSearch 내부에서 발생했다</u>는 의미예요.<br/>
+              만약 메시지가 <b>Failed to fetch</b> / <b>CORS</b>라면 <b>브라우저가 API 호출을 차단</b>한 경우가 많습니다.
+              이때는 <span class="mono">CONFIG.PROXY_URL</span>에 프록시를 넣어 우회해야 합니다.
+            </div>
+          </div>
+        `;
+        updateCountPill(0);
+        clearMarkers();
+      }finally{
+        $('btnSearch').disabled = false;
+        $('btnSearch').textContent = '조회';
+      }
+    }
+
+    function onReset(){
+      $('q').value = '';
+      $('gu').value = '';
+      $('pageNo').value = 1;
+      $('numOfRows').value = 20;
+      $('sort').value = 'name';
+
+      state.items = [];
+      updateCountPill(0);
+      clearMarkers();
+      $('list').innerHTML = `<div class="empty">검색 조건을 입력하고 <b>조회</b>를 눌러주세요.</div>`;
+
+      if(state.map){
+        state.map.setLevel(6);
+        state.map.setCenter(new kakao.maps.LatLng(state.center.lat, state.center.lng));
+        updateCenterPill();
+      }
+    }
+
+    async function onMyLocation(){
+      try{
+        await loadKakaoIfNeeded();
+
+        const my = await getMyLocation();
+        state.myPos = my;
+
+        // 내 위치 마커
+        const pos = new kakao.maps.LatLng(my.lat, my.lng);
+        const marker = new kakao.maps.Marker({ position: pos });
+        marker.setMap(state.map);
+        state.markers.push(marker);
+
+        state.map.setLevel(5);
+        state.map.panTo(pos);
+        updateCenterPill();
+
+        toast('내 위치로 이동했습니다.');
+      }catch(err){
+        toast('내 위치를 가져오지 못했습니다: ' + (err?.message || err));
+      }
+    }
+
+    // -----------------------------
+    // 9) 시작
+    // -----------------------------
+    // ✅ Uncaught (in promise) 방지: 처리되지 않은 Promise 에러를 화면에 표시
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('UnhandledRejection:', event.reason);
+      toast('Uncaught (in promise): ' + errorToMessage(event.reason));
+    });
+
+    window.addEventListener('error', (event) => {
+      // 스크립트 로드 실패(카카오 SDK 등)도 여기로 올 수 있음
+      if(event?.message) toast('Error: ' + event.message);
+      // 리소스 로드 에러가 객체로 오는 경우
+      if(!event?.message && event?.error) toast('Error: ' + errorToMessage(event.error));
+    });
+
+    window.addEventListener('load', () => {
+      if(location.protocol === 'file:'){
+        toast('이 파일을 직접 열면(file://) API 호출이 막힐 수 있어요. Live Server로 실행하세요.');
+      }
+      // 이벤트 바인딩 (지도는 조회 시 로드/초기화)
+      $('btnSearch').addEventListener('click', onSearch);
+      $('btnReset').addEventListener('click', onReset);
+      $('btnMy').addEventListener('click', onMyLocation);
+
+      // 동적 버튼(에러 영역) 이벤트 위임
+      document.body.addEventListener('click', async (e) => {
+        const t = e.target;
+        if(t && t.id === 'btnCopyUrl'){
+          try{
+            await navigator.clipboard.writeText(state._lastRequestUrl || '');
+            toast('요청 URL을 복사했어요.');
+          }catch{
+            toast('복사에 실패했어요. (브라우저 권한/HTTPS 필요)');
+          }
+        }
+      });
+
+      // Enter로 검색
+      ['q'].forEach(id => {
+        $(id).addEventListener('keydown', (e) => {
+          if(e.key === 'Enter') onSearch();
+        });
+      });
+    });
+  </script>
+</body>
+</html>
