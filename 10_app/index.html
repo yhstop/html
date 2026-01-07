@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>부산 맛집 정보</title>
+
+  <!-- Kakao Maps JS SDK: 아래 YOUR_KAKAO_APP_KEY 를 본인 키로 교체하세요 -->
+  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=3ca8f8ca6e23307fccc79051a54d9f4a&libraries=services"></script>
+
+  <style>
+    :root{
+      --bg:#0b0c10;
+      --card:#121420;
+      --card2:#0f111a;
+      --text:#e9ecf1;
+      --muted:#a8b0c0;
+      --line:rgba(255,255,255,.10);
+      --accent:#ff4d4f;
+      --accent2:#4ade80;
+      --shadow: 0 12px 30px rgba(0,0,0,.35);
+      --radius:18px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, Apple SD Gothic Neo, "Helvetica Neue", Arial;
+      color:var(--text);
+      background:linear-gradient(180deg,#0b0c10 0%, #090a0f 100%);
+      min-height:100vh;
+    }
+
+    .app{
+      max-width:1180px;
+      margin:0 auto;
+      padding:18px;
+    }
+
+    .shell{
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap:14px;
+      align-items:stretch;
+    }
+
+    .panel{
+      background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+      min-height: calc(100vh - 36px);
+    }
+
+    /* Left: list */
+    .listHeader{
+      padding:14px 14px 12px;
+      border-bottom:1px solid var(--line);
+      background:rgba(0,0,0,.20);
+      position:sticky;
+      top:0;
+      z-index:3;
+      backdrop-filter: blur(10px);
+    }
+
+    .titleRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .brand{
+      font-weight:800;
+      letter-spacing:-.02em;
+      font-size:16px;
+    }
+    .pill{
+      font-size:12px;
+      color:var(--muted);
+      border:1px solid var(--line);
+      padding:6px 10px;
+      border-radius:999px;
+      background:rgba(255,255,255,.02);
+    }
+
+    .searchRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+
+    .search{
+      flex:1;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      background:rgba(255,255,255,.04);
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 12px;
+    }
+
+    .search input{
+      flex:1;
+      border:none;
+      outline:none;
+      background:transparent;
+      color:var(--text);
+      font-size:14px;
+    }
+
+    .iconBtn{
+      width:42px;
+      height:42px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      user-select:none;
+      transition:.15s ease;
+    }
+    .iconBtn:hover{transform:translateY(-1px); background:rgba(255,255,255,.06)}
+
+    .tabs{
+      margin-top:10px;
+      display:flex;
+      gap:8px;
+    }
+    .tab{
+      flex:1;
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+      color:var(--muted);
+      font-size:13px;
+      cursor:pointer;
+      text-align:center;
+      transition:.15s ease;
+    }
+    .tab.active{
+      color:var(--text);
+      border-color:rgba(255,77,79,.45);
+      background:rgba(255,77,79,.12);
+    }
+
+    .listBody{
+      height: calc(100vh - 36px);
+      overflow:auto;
+      padding:10px;
+    }
+
+    .row{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:10px;
+      padding:12px;
+      border-radius:14px;
+      border:1px solid transparent;
+      cursor:pointer;
+      transition:.15s ease;
+    }
+    .row:hover{background:rgba(255,255,255,.03); border-color:var(--line)}
+    .row.active{background:rgba(255,255,255,.05); border-color:rgba(255,77,79,.35)}
+
+    .row h4{
+      margin:0 0 6px;
+      font-size:14px;
+      letter-spacing:-.02em;
+    }
+    .meta{
+      margin:0;
+      color:var(--muted);
+      font-size:12.5px;
+      line-height:1.35;
+    }
+
+    .heart{
+      width:34px;
+      height:34px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      display:grid;
+      place-items:center;
+      background:rgba(255,255,255,.02);
+      transition:.15s ease;
+    }
+    .heart.on{border-color:rgba(255,77,79,.45); background:rgba(255,77,79,.12)}
+    .heart svg{width:18px; height:18px}
+
+    .footerBar{
+      position:sticky;
+      bottom:0;
+      background:rgba(0,0,0,.25);
+      border-top:1px solid var(--line);
+      padding:10px;
+      backdrop-filter: blur(10px);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+    }
+
+    .btn{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-size:13px;
+      transition:.15s ease;
+    }
+    .btn:hover{background:rgba(255,255,255,.06)}
+    .btn:disabled{opacity:.5; cursor:not-allowed}
+
+    /* Right: detail */
+    .detailWrap{
+      display:flex;
+      flex-direction:column;
+      height: calc(100vh - 36px);
+    }
+
+    .hero{
+      position:relative;
+      aspect-ratio: 16/9;
+      background: linear-gradient(135deg, rgba(255,77,79,.18), rgba(74,222,128,.10));
+      border-bottom:1px solid var(--line);
+    }
+    .hero img{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      opacity:.92;
+    }
+    .hero .overlay{
+      position:absolute;
+      inset:0;
+      background:linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.75));
+    }
+    .heroTop{
+      position:absolute;
+      inset:0;
+      padding:14px;
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+    }
+
+    .heroBadge{
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .chip{
+      font-size:12px;
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:rgba(0,0,0,.35);
+      color:var(--text);
+      backdrop-filter: blur(6px);
+    }
+
+    .detailBody{
+      padding:14px;
+      overflow:auto;
+    }
+
+    .kv{
+      display:grid;
+      grid-template-columns: 96px 1fr;
+      gap:10px 12px;
+      align-items:start;
+      margin:14px 0;
+    }
+
+    .k{
+      color:var(--muted);
+      font-size:12px;
+      background:#000;
+      padding:7px 10px;
+      border-radius:10px;
+      border:1px solid var(--line);
+      width:fit-content;
+    }
+    .v{
+      font-size:14px;
+      line-height:1.5;
+      color:var(--text);
+      margin-top:2px;
+    }
+
+    .callRow{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:10px;
+    }
+
+    .cta{
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      font-size:13px;
+      cursor:pointer;
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+
+    #map{
+      width:100%;
+      height:280px;
+      border-radius:14px;
+      border:1px solid var(--line);
+      overflow:hidden;
+      margin-top:12px;
+      background:rgba(255,255,255,.02);
+    }
+
+    .empty{
+      padding:18px;
+      color:var(--muted);
+      font-size:14px;
+      line-height:1.5;
+    }
+
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom:18px;
+      transform:translateX(-50%);
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:rgba(0,0,0,.55);
+      backdrop-filter: blur(10px);
+      color:var(--text);
+      font-size:13px;
+      box-shadow:var(--shadow);
+      opacity:0;
+      pointer-events:none;
+      transition:.2s ease;
+      z-index:50;
+    }
+    .toast.show{opacity:1; bottom:24px}
+
+    @media (max-width: 980px){
+      .shell{grid-template-columns: 1fr;}
+      .panel{min-height:auto}
+      .listBody{height:auto; max-height: 48vh;}
+      .detailWrap{height:auto;}
+      #map{height:240px}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="shell">
+
+      <!-- LEFT: LIST -->
+      <section class="panel" aria-label="맛집 목록">
+        <div class="listHeader">
+          <div class="titleRow">
+            <div class="brand">부산 맛집 정보</div>
+            <div class="pill" id="statusPill">준비 중</div>
+          </div>
+
+          <div class="searchRow">
+            <div class="search" role="search">
+              <span aria-hidden="true">🔎</span>
+              <input id="q" type="search" placeholder="상호명/메뉴/주소 검색" autocomplete="off" />
+            </div>
+            <button class="iconBtn" id="refreshBtn" title="새로고침" aria-label="새로고침">⟳</button>
+          </div>
+
+          <div class="tabs">
+            <button class="tab active" id="tabAll">전체</button>
+            <button class="tab" id="tabFav">즐겨찾기</button>
+          </div>
+        </div>
+
+        <div class="listBody" id="list"></div>
+
+        <div class="footerBar">
+          <button class="btn" id="prevBtn">이전</button>
+          <div class="pill" id="pagePill">1 / 1</div>
+          <button class="btn" id="nextBtn">다음</button>
+        </div>
+      </section>
+
+      <!-- RIGHT: DETAIL -->
+      <section class="panel" aria-label="상세 정보">
+        <div class="detailWrap">
+          <div class="hero" id="hero">
+            <img id="heroImg" alt="" src="" style="display:none" />
+            <div class="overlay"></div>
+            <div class="heroTop">
+              <div class="heroBadge">
+                <span class="chip" id="heroTitle">상세보기</span>
+                <span class="chip" id="heroSub">부산광역시</span>
+              </div>
+              <button class="iconBtn" id="detailFavBtn" title="즐겨찾기" aria-label="즐겨찾기">♡</button>
+            </div>
+          </div>
+
+          <div class="detailBody" id="detail">
+            <div class="empty">
+              왼쪽 목록에서 맛집을 선택하세요.<br/>
+              <small>Tip: 공공데이터포털 서비스키/카카오 앱키를 넣으면 실데이터 + 지도까지 동작합니다.</small>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+  /**
+   * 부산 맛집 정보 서비스 (Vanilla)
+   * - API: https://apis.data.go.kr/6260000/FoodService
+   * - 지도: Kakao Maps
+   *
+   * 사용 방법
+   * 1) 아래 SERVICE_KEY에 공공데이터포털 "인증키(Decoding)" 값을 넣으세요.
+   * 2) <head>의 Kakao script appkey=YOUR_KAKAO_APP_KEY 를 본인 키로 교체하세요.
+   */
+
+  const CONFIG = {
+    SERVICE_KEY: 'U3rjn1OQzoe833jk5RJokTl1sVFUmIQp7dGTZl0tcvNU7p2blLzjccSSgrAHQgyLYlBIm7Qt0wOFwQRvvG7h8Q==', // 공공데이터포털 인증키(Decoding)
+    BASE_URL: 'https://apis.data.go.kr/6260000/FoodService',
+    PAGE_SIZE: 10,
+    DEFAULT_REGION_HINT: '부산'
+  };
+
+  // ---- DOM ----
+  const elList = document.getElementById('list');
+  const elDetail = document.getElementById('detail');
+  const elQ = document.getElementById('q');
+  const elPrev = document.getElementById('prevBtn');
+  const elNext = document.getElementById('nextBtn');
+  const elPagePill = document.getElementById('pagePill');
+  const elStatus = document.getElementById('statusPill');
+  const elRefresh = document.getElementById('refreshBtn');
+  const elTabAll = document.getElementById('tabAll');
+  const elTabFav = document.getElementById('tabFav');
+  const elHeroTitle = document.getElementById('heroTitle');
+  const elHeroSub = document.getElementById('heroSub');
+  const elHeroImg = document.getElementById('heroImg');
+  const elDetailFavBtn = document.getElementById('detailFavBtn');
+  const elToast = document.getElementById('toast');
+
+  // ---- State ----
+  let rawItems = [];       // API/Mock 전체
+  let viewItems = [];      // 검색/필터 적용 결과
+  let page = 1;
+  let totalPages = 1;
+  let activeId = null;
+  let mode = 'all'; // all | fav
+
+  // Kakao Map
+  let map = null;
+  let marker = null;
+  let geocoder = null;
+
+  // ---- Utils ----
+  const escapeHtml = (s='') => String(s)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
+
+  const toast = (msg) => {
+    elToast.textContent = msg;
+    elToast.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => elToast.classList.remove('show'), 1500);
+  };
+
+  const uid = (it) => {
+    // API마다 고유키명이 다를 수 있어, 상호명+주소 기반으로 안정적 키 생성
+    return btoa(unescape(encodeURIComponent(`${it.name||''}|${it.addr||''}|${it.tel||''}`))).slice(0, 24);
+  };
+
+  const favKey = 'busan_food_favorites_v1';
+  const getFavs = () => {
+    try { return new Set(JSON.parse(localStorage.getItem(favKey) || '[]')); }
+    catch { return new Set(); }
+  };
+  const setFavs = (set) => localStorage.setItem(favKey, JSON.stringify([...set]));
+
+  const iconHeart = (on=false) => on
+    ? `<svg viewBox="0 0 24 24" fill="${'currentColor'}" aria-hidden="true"><path d="M12 21s-7.2-4.35-9.6-8.55C.48 8.94 2.7 6 6 6c1.74 0 3.35.81 4.4 2.09C11.65 6.81 13.26 6 15 6c3.3 0 5.52 2.94 3.6 6.45C19.2 16.65 12 21 12 21z"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7.2-4.35-9.6-8.55C.48 8.94 2.7 6 6 6c1.74 0 3.35.81 4.4 2.09C11.65 6.81 13.26 6 15 6c3.3 0 5.52 2.94 3.6 6.45C19.2 16.65 12 21 12 21z"/></svg>`;
+
+  // ---- Data mapping ----
+  function normalizeApiItem(x){
+    // FoodService 응답 필드가 환경에 따라 다를 수 있어 추정 매핑
+    // 가능한 값들을 최대한 흡수
+    const name = x.MAIN_TITLE || x.title || x.MAINTITLE || x.상호명 || x.업소명 || x.name || '';
+    const addr = x.ADDR1 || x.ADDR || x.ADDRESS || x.addr1 || x.주소 || x.addr || '';
+    const tel  = x.CNTCT_TEL || x.TEL || x.PHONE || x.전화번호 || x.tel || '';
+    const menu = x.RPRSNTV_MENU || x.MENU || x.MAIN_MENU || x.대표메뉴 || x.menu || '';
+    const intro = x.ITEMCNTNTS || x.DETAIL || x.소개 || x.intro || '';
+    const hours = x.USAGE_DAY_WEEK_AND_TIME || x.OPERTIME || x.운영시간 || x.hours || '';
+    const homepage = x.HOMEPAGE_URL || x.HOMEPAGE || x.홈페이지 || x.homepage || '';
+    const lat = Number(x.LAT || x.LATITUDE || x.mapY || x.위도 || x.lat || NaN);
+    const lng = Number(x.LNG || x.LONGITUDE || x.mapX || x.경도 || x.lng || NaN);
+    const img = x.MAIN_IMG_NORMAL || x.MAIN_IMG_THUMB || x.이미지 || x.img || '';
+
+    return {
+      name, addr, tel, menu, intro, hours, homepage,
+      lat: Number.isFinite(lat) ? lat : null,
+      lng: Number.isFinite(lng) ? lng : null,
+      img
+    };
+  }
+
+  // ---- API ----
+  async function fetchFoodList(){
+    // FoodService는 보통 list endpoint가 여러 개일 수 있습니다.
+    // 일단 "getFoodKr" 형태/"FoodKr" 같은 케이스가 있을 수 있으므로,
+    // 여러 후보를 순차 시도합니다.
+
+    const candidates = [
+      `${CONFIG.BASE_URL}/getFoodKr`,
+      `${CONFIG.BASE_URL}/getFoodKrList`,
+      `${CONFIG.BASE_URL}/getFoodService`,
+      `${CONFIG.BASE_URL}`
+    ];
+
+    const params = new URLSearchParams({
+      serviceKey: CONFIG.SERVICE_KEY,
+      pageNo: '1',
+      numOfRows: '100',
+      resultType: 'json'
+    });
+
+    for (const url of candidates){
+      try{
+        const res = await fetch(`${url}?${params.toString()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+
+        // 공공데이터 응답 구조가 다양해서 items 배열을 탐색
+        const items =
+          json?.getFoodKr?.item ||
+          json?.getFoodKr?.items ||
+          json?.response?.body?.items?.item ||
+          json?.response?.body?.items ||
+          json?.body?.items?.item ||
+          json?.items ||
+          json?.data ||
+          null;
+
+        if (!items) throw new Error('items not found');
+
+        const arr = Array.isArray(items) ? items : (items?.item ? items.item : []);
+        const mapped = arr.map(normalizeApiItem).filter(it => it.name || it.addr);
+        if (mapped.length) return mapped;
+
+      }catch(err){
+        // 다음 후보 시도
+      }
+    }
+
+    // 실패 시 mock
+    throw new Error('API 호출 실패 (서비스키/엔드포인트/CORS 확인 필요)');
+  }
+
+  // ---- Mock ----
+  function getMock(){
+    return [
+      {
+        name:'만드리곤드레밥',
+        addr:'강서구 공항앞길 85번길 13',
+        menu:'돌솥곤드레정식, 단호박오리훈제',
+        tel:'051-941-3669',
+        hours:'11:00-21:00 (20:00 라스트오더)',
+        intro:'생 곤드레나물을 사용해 돌솥밥을 만들고, 된장찌개와 다양한 반찬이 함께 제공되는 돌솥곤드레정식이 인기입니다.',
+        img:'',
+        lat:null,
+        lng:null,
+        homepage:''
+      },
+      {
+        name:'민물가든',
+        addr:'강서구 눌차중앙길5(눌림동)',
+        menu:'육옻진흙어조림, 붕어찜',
+        tel:'',
+        hours:'',
+        intro:'',
+        img:'',
+        lat:null,
+        lng:null,
+        homepage:''
+      },
+      {
+        name:'가야할매밀면',
+        addr:'부산 연제구 월드컵대로 145번길 32',
+        menu:'물밀면, 비빔밀면',
+        tel:'',
+        hours:'',
+        intro:'',
+        img:'',
+        lat:null,
+        lng:null,
+        homepage:''
+      },
+      {
+        name:'국제밀면본점',
+        addr:'연제구 중앙대로1235번길 23-6',
+        menu:'물밀면, 비빔밀면',
+        tel:'',
+        hours:'',
+        intro:'',
+        img:'',
+        lat:null,
+        lng:null,
+        homepage:''
+      },
+      {
+        name:'거인통닭',
+        addr:'중구 중구로47번길34',
+        menu:'후라이드치킨',
+        tel:'',
+        hours:'',
+        intro:'',
+        img:'',
+        lat:null,
+        lng:null,
+        homepage:''
+      },
+      {
+        name:'부산곰장어맛집 성일집',
+        addr:'중구 대교로 103',
+        menu:'소금구이, 양념구이',
+        tel:'',
+        hours:'',
+        intro:'',
+        img:'',
+        lat:null,
+        lng:null,
+        homepage:''
+      }
+    ];
+  }
+
+  // ---- Render list + pagination ----
+  function computeView(){
+    const q = elQ.value.trim().toLowerCase();
+    const favs = getFavs();
+
+    let arr = rawItems.slice();
+
+    if (mode === 'fav'){
+      arr = arr.filter(it => favs.has(uid(it)));
+    }
+
+    if (q){
+      arr = arr.filter(it =>
+        (it.name||'').toLowerCase().includes(q) ||
+        (it.addr||'').toLowerCase().includes(q) ||
+        (it.menu||'').toLowerCase().includes(q)
+      );
+    }
+
+    viewItems = arr;
+    totalPages = Math.max(1, Math.ceil(viewItems.length / CONFIG.PAGE_SIZE));
+    page = Math.min(page, totalPages);
+
+    elPagePill.textContent = `${page} / ${totalPages}`;
+    elPrev.disabled = (page <= 1);
+    elNext.disabled = (page >= totalPages);
+
+    renderList();
+  }
+
+  function renderList(){
+    const favs = getFavs();
+    const start = (page - 1) * CONFIG.PAGE_SIZE;
+    const slice = viewItems.slice(start, start + CONFIG.PAGE_SIZE);
+
+    if (!slice.length){
+      elList.innerHTML = `<div class="empty">표시할 데이터가 없습니다.</div>`;
+      return;
+    }
+
+    elList.innerHTML = slice.map(it => {
+      const id = uid(it);
+      const on = favs.has(id);
+      const active = (activeId === id);
+      return `
+        <div class="row ${active ? 'active' : ''}" data-id="${id}">
+          <div>
+            <h4>${escapeHtml(it.name || '이름 없음')}</h4>
+            <p class="meta">주소: ${escapeHtml(it.addr || '-')}</p>
+            <p class="meta">메뉴: ${escapeHtml(it.menu || '-')}</p>
+          </div>
+          <button class="heart ${on ? 'on' : ''}" data-heart="${id}" title="즐겨찾기" aria-label="즐겨찾기">
+            ${iconHeart(on)}
+          </button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ---- Detail ----
+  function renderDetail(it){
+    const id = uid(it);
+    const favs = getFavs();
+    const on = favs.has(id);
+
+    elHeroTitle.textContent = it.name || '상세보기';
+    elHeroSub.textContent = '부산광역시';
+    elDetailFavBtn.textContent = on ? '♥' : '♡';
+    elDetailFavBtn.setAttribute('data-id', id);
+
+    if (it.img){
+      elHeroImg.src = it.img;
+      elHeroImg.alt = it.name ? `${it.name} 이미지` : '이미지';
+      elHeroImg.style.display = '';
+    } else {
+      elHeroImg.removeAttribute('src');
+      elHeroImg.style.display = 'none';
+    }
+
+    elDetail.innerHTML = `
+      <div class="kv">
+        <div class="k">상호명</div>
+        <div class="v"><strong>${escapeHtml(it.name || '-')}</strong></div>
+
+        <div class="k">주소</div>
+        <div class="v">${escapeHtml(it.addr || '-')}</div>
+
+        <div class="k">소개</div>
+        <div class="v">${escapeHtml(it.intro || '소개 정보가 없습니다.')}</div>
+
+        <div class="k">대표메뉴</div>
+        <div class="v">${escapeHtml(it.menu || '메뉴 정보가 없습니다.')}</div>
+
+        <div class="k">문의</div>
+        <div class="v">${it.tel ? `<a href="tel:${escapeHtml(it.tel)}" style="color:inherit">${escapeHtml(it.tel)}</a>` : '전화번호 정보가 없습니다.'}</div>
+
+        <div class="k">운영시간</div>
+        <div class="v">${escapeHtml(it.hours || '운영시간 정보가 없습니다.')}</div>
+
+        <div class="k">홈페이지</div>
+        <div class="v">${it.homepage ? `<a href="${escapeHtml(it.homepage)}" target="_blank" rel="noopener" style="color:inherit">${escapeHtml(it.homepage)}</a>` : '공식 홈페이지 없음'}</div>
+      </div>
+
+      <div class="callRow">
+        <button class="cta" id="copyAddrBtn">📋 주소 복사</button>
+        <button class="cta" id="openKakaoBtn">🗺️ 카카오맵 열기</button>
+        <button class="cta" id="openNaverBtn">🔎 네이버 검색</button>
+      </div>
+
+      <div id="map" aria-label="지도"></div>
+    `;
+
+    // actions
+    document.getElementById('copyAddrBtn').onclick = async () => {
+      try{
+        await navigator.clipboard.writeText(it.addr || '');
+        toast('주소를 복사했어요');
+      }catch{
+        toast('복사 실패: HTTPS 환경에서만 지원될 수 있어요');
+      }
+    };
+
+    document.getElementById('openKakaoBtn').onclick = () => {
+      const q = encodeURIComponent(`${it.name || ''} ${it.addr || ''}`.trim());
+      window.open(`https://map.kakao.com/link/search/${q}`, '_blank', 'noopener');
+    };
+
+    document.getElementById('openNaverBtn').onclick = () => {
+      const q = encodeURIComponent(`${it.name || ''} ${it.addr || ''}`.trim());
+      window.open(`https://search.naver.com/search.naver?query=${q}`, '_blank', 'noopener');
+    };
+
+    // map
+    drawMap(it);
+  }
+
+  // ---- Kakao Map ----
+  function ensureMapReady(){
+    if (!window.kakao || !kakao.maps){
+      toast('카카오맵 SDK를 불러오지 못했어요. appkey를 확인하세요.');
+      return false;
+    }
+
+    if (!map){
+      const container = document.getElementById('map');
+      map = new kakao.maps.Map(container, {
+        center: new kakao.maps.LatLng(35.1796, 129.0756),
+        level: 6
+      });
+      marker = new kakao.maps.Marker({ position: map.getCenter() });
+      marker.setMap(map);
+      geocoder = new kakao.maps.services.Geocoder();
+    }
+
+    return true;
+  }
+
+  function drawMap(it){
+    if (!ensureMapReady()) return;
+
+    const setPos = (lat, lng) => {
+      const pos = new kakao.maps.LatLng(lat, lng);
+      map.setCenter(pos);
+      marker.setPosition(pos);
+    };
+
+    // 1) lat/lng 있으면 바로 표시
+    if (it.lat && it.lng){
+      setPos(it.lat, it.lng);
+      return;
+    }
+
+    // 2) 없으면 주소 지오코딩
+    const addr = (it.addr || '').trim();
+    if (!addr){
+      toast('주소가 없어 지도에 표시할 수 없어요');
+      return;
+    }
+
+    geocoder.addressSearch(addr, (result, status) => {
+      if (status === kakao.maps.services.Status.OK && result?.[0]){
+        const {y, x} = result[0];
+        setPos(Number(y), Number(x));
+      } else {
+        // 그래도 부산 중심으로
+        toast('주소 검색 실패: 부산 중심으로 표시합니다');
+        setPos(35.1796, 129.0756);
+      }
+    });
+  }
+
+  // ---- Events ----
+  elList.addEventListener('click', (e) => {
+    const heartBtn = e.target.closest('[data-heart]');
+    if (heartBtn){
+      e.stopPropagation();
+      const id = heartBtn.getAttribute('data-heart');
+      toggleFavById(id);
+      computeView();
+      // 상세가 현재 항목이면 버튼 상태도 동기화
+      if (activeId === id) syncDetailFavBtn();
+      return;
+    }
+
+    const row = e.target.closest('.row');
+    if (!row) return;
+    const id = row.getAttribute('data-id');
+    selectById(id);
+  });
+
+  elDetailFavBtn.addEventListener('click', () => {
+    const id = elDetailFavBtn.getAttribute('data-id');
+    if (!id) return;
+    toggleFavById(id);
+    syncDetailFavBtn();
+    computeView();
+  });
+
+  function syncDetailFavBtn(){
+    const favs = getFavs();
+    elDetailFavBtn.textContent = favs.has(activeId) ? '♥' : '♡';
+  }
+
+  function toggleFavById(id){
+    const favs = getFavs();
+    if (favs.has(id)){
+      favs.delete(id);
+      toast('즐겨찾기 해제');
+    } else {
+      favs.add(id);
+      toast('즐겨찾기에 추가');
+    }
+    setFavs(favs);
+  }
+
+  function selectById(id){
+    activeId = id;
+    const it = rawItems.find(x => uid(x) === id) || viewItems.find(x => uid(x) === id);
+    if (!it) return;
+    renderDetail(it);
+    computeView();
+  }
+
+  elQ.addEventListener('input', () => { page = 1; computeView(); });
+  elPrev.addEventListener('click', () => { page = Math.max(1, page-1); computeView(); });
+  elNext.addEventListener('click', () => { page = Math.min(totalPages, page+1); computeView(); });
+
+  elRefresh.addEventListener('click', () => init(true));
+
+  elTabAll.addEventListener('click', () => {
+    mode = 'all';
+    elTabAll.classList.add('active');
+    elTabFav.classList.remove('active');
+    page = 1;
+    computeView();
+  });
+
+  elTabFav.addEventListener('click', () => {
+    mode = 'fav';
+    elTabFav.classList.add('active');
+    elTabAll.classList.remove('active');
+    page = 1;
+    computeView();
+  });
+
+  // ---- Init ----
+  async function init(forceReload=false){
+    elStatus.textContent = '로딩 중…';
+
+    try{
+      // 이미 로딩한 적 있으면 캐시 재사용
+      if (!rawItems.length || forceReload){
+        rawItems = await fetchFoodList();
+        elStatus.textContent = `API ${rawItems.length}개`;
+      }
+    }catch(err){
+      // API 실패 시 mock 사용
+      rawItems = getMock();
+      elStatus.textContent = 'Mock 데이터';
+
+      // 도움말 토스트
+      toast('API 실패: 서비스키/엔드포인트/CORS 확인');
+    }
+
+    // 항상 최소 10개는 보이도록(요구사항)
+    // mock이 10 미만이면 반복해서 채움
+    while (rawItems.length < 10){
+      rawItems = rawItems.concat(rawItems);
+      rawItems = rawItems.slice(0, 10);
+    }
+
+    // 초기 선택
+    computeView();
+    if (!activeId && viewItems[0]){
+      selectById(uid(viewItems[0]));
+    }
+  }
+
+  init(false);
+</script>
+</body>
+</html>
