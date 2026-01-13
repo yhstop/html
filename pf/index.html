@@ -416,6 +416,7 @@
                 <form id="contactForm" class="space-y-4">
                     <input type="text" name="Name" placeholder="Your Name" required class="w-full bg-zinc-800 p-4 rounded-lg outline-none border border-transparent focus:border-accent transition duration-300">
                     <input type="email" name="Email" placeholder="Your Email" required class="w-full bg-zinc-800 p-4 rounded-lg outline-none border border-transparent focus:border-accent transition duration-300">
+                    <input type="tel" name="Tel" placeholder="Your Phone Number" required class="w-full bg-zinc-800 p-4 rounded-lg outline-none border border-transparent focus:border-accent transition duration-300">
                     <textarea name="Message" rows="6" placeholder="Your Message" class="w-full bg-zinc-800 p-4 rounded-lg outline-none border border-transparent focus:border-accent transition duration-300"></textarea>
                     <button type="submit" class="bg-accent px-12 py-3 rounded-lg font-medium hover:opacity-90 transition shadow-lg shadow-accent/20">Submit</button>
                 </form>
@@ -601,5 +602,26 @@
             setTimeout(() => { msg.innerHTML = ""; this.reset(); }, 3000);
         });
     </script>
+    
+    <script>
+     // form안에 데이터를 구글시트에 보내는 코드
+     // 구글시트 폼 주소
+    const scriptURL = 'https://script.google.com/macros/s/AKfycby1Suo1s-yxUMfbJBmUn-ad04jqIb_vHa_iPh5ZODHt53uErwekyr47SM1QeVC0x8-g/exec' // add your own app script link here
+    const form = document.forms['submit-to-google-sheet']
+    const msg = document.getElementById("msg")
+  
+    form.addEventListener('submit', e => {
+      e.preventDefault()
+      fetch(scriptURL, { method: 'POST', body: new FormData(form)})
+        .then(response => {
+            msg.innerHTML = "Message sent successfully"
+            setTimeout(function(){
+                msg.innerHTML = ""
+            },5000)
+            form.reset()
+        })
+        .catch(error => console.error('Error!', error.message))
+    })
+  </script>
 </body>
 </html>
